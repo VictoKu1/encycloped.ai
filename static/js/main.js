@@ -1,4 +1,8 @@
 $(document).ready(function () {
+    // Toggle edit form when the edit (pen) icon is clicked
+    $("#search-btn").click(function () {
+        $("#edit-form").toggle();
+    });
     // Show/hide report modal
     $("#report-btn").click(function () {
         $("#report-modal").show();
@@ -78,3 +82,13 @@ $(document).ready(function () {
         });
     });
 });
+
+
+
+
+
+
+
+
+
+

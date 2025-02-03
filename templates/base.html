@@ -1,13 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>{% block title %}AI Encyclopedia{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</head>
-<body>
-  {% block content %}{% endblock %}
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>
+      {% block title %}
+        AI Encyclopedia
+      {% endblock %}
+    </title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+    </script>
+  </head>
+  <body>
+    {% block content %}
+
+    {% endblock %}
+    <footer class="site-footer">
+      <div class="copyright">
+        <h6>
+          Copyright © <span class="currentYear"></span>
+          <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
+          All rights reserved. Design by
+          <a href="https://victoku1.netlify.app/">VictoKu1</a>
+        </h6>
+      </div>
+    </footer>
+  </body>
 </html>

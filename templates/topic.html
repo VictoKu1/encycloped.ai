@@ -1,36 +1,49 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{ topic }} - AI Encyclopedia</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script>
+      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+    </script>
+  </head>
+  <body>
+    <!-- Header with site name on left and search icon on right -->
+    <header class="page-header">
+      <div class="header-left">
+        <a href="/">encycloped.ai</a>
+      </div>
+      <div class="header-right">
+        <button id="search-btn" title="Search">&#128269;</button>
+        <div id="edit-form">
+          <form method="POST" action="/">
+            <input type="text" name="topic" placeholder="Enter a topic..." required />
+            <button type="submit">Search</button>
+          </form>
+        </div>
+      </div>
+    </header>
 
-{% block title %}{{ topic }} - AI Encyclopedia{% endblock %}
-
-{% block content %}
-  <h1>{{ topic }}</h1>
-  {% if subtopic %}
-    <h2>Subtopic: {{ subtopic }}</h2>
-  {% endif %}
-  <div id="article-content">
-    {{ content | safe }}
-  </div>
-  
-  <!-- Buttons for reporting and adding info -->
-  <button id="report-btn">Report an issue</button>
-  <button id="add-info-btn">Add missing information</button>
-  
-  <!-- Modal for report -->
-  <div id="report-modal" style="display:none;">
-    <h3>Report Issue for {{ topic }}</h3>
-    <textarea id="report-details" placeholder="Explain what is wrong..."></textarea>
-    <input type="text" id="report-sources" placeholder="Comma separated sources">
-    <button id="send-report">Send Report</button>
-    <button id="close-report">Close</button>
-  </div>
-  
-  <!-- Modal for adding information -->
-  <div id="add-info-modal" style="display:none;">
-    <h3>Add Information for {{ topic }}</h3>
-    <input type="text" id="subtopic-name" placeholder="Subtopic Name">
-    <textarea id="additional-info" placeholder="Enter additional information..."></textarea>
-    <input type="text" id="info-sources" placeholder="Comma separated sources">
-    <button id="send-add-info">Submit</button>
-    <button id="close-add-info">Close</button>
-  </div>
-{% endblock %}
+    <!-- Main Content Container -->
+    <div class="container">
+      <header class="page-topic-header">
+        <h1>{{ topic }}</h1>
+      </header>
+      <div id="article-content">{{ content|safe }}</div>
+      <!-- Other elements like modals go here -->
+    </div>
+    <footer class="site-footer">
+      <div class="copyright">
+        <h6>
+          Copyright © <span class="currentYear"></span>
+          <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
+          All rights reserved. Design by
+          <a href="https://victoku1.netlify.app/">VictoKu1</a>
+        </h6>
+      </div>
+    </footer>
+  </body>
+</html>

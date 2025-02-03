@@ -1,12 +1,36 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>encycloped.ai - AI Moderated Encyclopedia</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <script>
+      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+    </script>
+  </head>
+  <body>
+    <div class="main-container">
+      <header>
+        <h1>encycloped.ai</h1>
+        <p class="subtitle">AI Moderated Encyclopedia</p>
+      </header>
+      <div class="search-box">
+        <form method="POST" action="/">
+          <input type="text" name="topic" placeholder="Enter a topic..." required />
+          <button type="submit">Search</button>
+        </form>
+      </div>
+    </div>
 
-{% block title %}Home - AI Encyclopedia{% endblock %}
-
-{% block content %}
-  <div class="search-container">
-    <form method="POST">
-      <input type="text" name="topic" placeholder="Enter a topic..." required>
-      <button type="submit">Search</button>
-    </form>
-  </div>
-{% endblock %}
+    <footer class="site-footer">
+      <div class="copyright">
+        <h6>
+          Copyright © <span class="currentYear"></span>
+          <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
+          All rights reserved. Design by
+          <a href="https://victoku1.netlify.app/">VictoKu1</a>
+        </h6>
+      </div>
+    </footer>
+  </body>
+</html>
