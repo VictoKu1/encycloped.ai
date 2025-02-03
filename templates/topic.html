@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ topic }} - AI Encyclopedia{% endblock %}
+
+{% block content %}
+  <h1>{{ topic }}</h1>
+  {% if subtopic %}
+    <h2>Subtopic: {{ subtopic }}</h2>
+  {% endif %}
+  <div id="article-content">
+    {{ content | safe }}
+  </div>
+  
+  <!-- Buttons for reporting and adding info -->
+  <button id="report-btn">Report an issue</button>
+  <button id="add-info-btn">Add missing information</button>
+  
+  <!-- Modal for report -->
+  <div id="report-modal" style="display:none;">
+    <h3>Report Issue for {{ topic }}</h3>
+    <textarea id="report-details" placeholder="Explain what is wrong..."></textarea>
+    <input type="text" id="report-sources" placeholder="Comma separated sources">
+    <button id="send-report">Send Report</button>
+    <button id="close-report">Close</button>
+  </div>
+  
+  <!-- Modal for adding information -->
+  <div id="add-info-modal" style="display:none;">
+    <h3>Add Information for {{ topic }}</h3>
+    <input type="text" id="subtopic-name" placeholder="Subtopic Name">
+    <textarea id="additional-info" placeholder="Enter additional information..."></textarea>
+    <input type="text" id="info-sources" placeholder="Comma separated sources">
+    <button id="send-add-info">Submit</button>
+    <button id="close-add-info">Close</button>
+  </div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Home - AI Encyclopedia{% endblock %}
+
+{% block content %}
+  <div class="search-container">
+    <form method="POST">
+      <input type="text" name="topic" placeholder="Enter a topic..." required>
+      <button type="submit">Search</button>
+    </form>
+  </div>
+{% endblock %}
