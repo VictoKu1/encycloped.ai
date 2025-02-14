@@ -2,17 +2,6 @@
 
 **encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
 
-## Table of Contents
-
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Running Locally](#running-locally)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgments](#acknowledgments)
-
 ## Features
 
 - **Dynamic Content Generation:**  
@@ -116,6 +105,7 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](LICE
 - [OpenAI](https://openai.com/) – For providing the ChatGPT API.
 - The open-source community – For their inspiration and continuous contributions.
 - Wikipedia and other collaborative knowledge-sharing platforms – For inspiring a decentralized approach to knowledge.
+
 
 
 
