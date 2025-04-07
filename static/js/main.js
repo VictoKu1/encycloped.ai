@@ -1,4 +1,4 @@
-$(document).ready(function () {
+$(document).ready( function () {
     // Toggle edit form when the edit (pen) icon is clicked
     $("#search-btn").click(function () {
         $("#edit-form").toggle();
@@ -82,6 +82,8 @@ $(document).ready(function () {
         });
     });
 });
+
+
 
 
 

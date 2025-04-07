@@ -34,6 +34,34 @@
       </header>
       <div id="article-content">{{ content|safe }}</div>
       <!-- Other elements like modals go here -->
+
+       <!-- Button to open the modal -->
+      <button id="report-btn" class="btn" >Report an Issue</button>
+
+      <!-- The Report Modal -->
+      <div id="report-modal" class="modal">
+        <div class="modal-content">
+          <span id="close-report" class="close">&times;</span>
+          <h2>Report Issue</h2>
+          <textarea id="report-details" placeholder="Describe the issue..."></textarea>
+          <input id="report-sources" type="text" placeholder="Sources (comma-separated)">
+          <button id="send-report">Submit</button>
+        </div>
+      </div>
+      <!-- Button to open the modal -->
+      <button id="add-info-btn" class="btn">Add Missing Info</button>
+
+      <!-- The Add-info Modal-->
+      <div id="add-info-modal" class="modal">
+        <div class="modal-content">
+          <span id="close-add-info" class="close">&times;</span>
+          <h2>Add Missing Information</h2>
+          <textarea id="additional-info" placeholder="Add information..."></textarea>
+          <input id="info-sources" type="text" placeholder="Sources (comma-separated)">
+          <button id="send-add-info">Submit</button>
+        </div>
+      </div>
+
     </div>
     <footer class="site-footer">
       <div class="copyright">
