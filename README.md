@@ -53,7 +53,7 @@ encycloped.ai/
 
    ```bash
    python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
    ```
 
 3. **Install the Dependencies:**
@@ -65,10 +65,25 @@ encycloped.ai/
 4. **Configure Environment Variables:**
 
    Create a `.env` file (or set the environment variables directly) to configure your API key, for example:
-
+  
+   Linux:
+   
    ```bash
    export OPENAI_API_KEY=your_openai_api_key
    ```
+  
+   Windows:
+   
+   - Using CMD:
+    ```cmd
+    set OPENAI_API_KEY=your_openai_api_key
+    ```
+   
+   - Using PowerShell:
+   
+    ```powershell
+    $env:OPENAI_API_KEY="your_openai_api_key"
+    ``` 
 
 ## Running Locally
 
@@ -105,10 +120,5 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](LICE
 - [OpenAI](https://openai.com/) – For providing the ChatGPT API.
 - The open-source community – For their inspiration and continuous contributions.
 - Wikipedia and other collaborative knowledge-sharing platforms – For inspiring a decentralized approach to knowledge.
-
-
-
-
-
 
 
