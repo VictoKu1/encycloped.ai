@@ -1,17 +1,77 @@
 import os
 import re
 import markdown
+import bleach
+import logging
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from openai import OpenAI
+from werkzeug.exceptions import BadRequest
+
+# Configure logging
+logging.basicConfig(
+    filename='app.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Initialize the OpenAI client; ensure your OPENAI_API_KEY is set in your environment
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
+
+# Initialize rate limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# Configure allowed HTML tags and attributes
+ALLOWED_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'blockquote', 'code']
+ALLOWED_ATTRIBUTES = {
+    'a': ['href', 'title'],
+    'h1': ['id'],
+    'h2': ['id'],
+    'h3': ['id'],
+    'h4': ['id'],
+    'h5': ['id'],
+    'h6': ['id']
+}
+
+# Topic slug validation regex
+TOPIC_SLUG_REGEX = re.compile(r'^[a-zA-Z0-9_\-\s]{1,50}$')
 
 # A simple in-memory datastore for demo purposes.
 data_store = {}  # e.g., {'Python': {'content': '...', 'subtopics': {...}}}
+
+# --- Security Helpers ---
+
+def validate_topic_slug(topic):
+    """Validate topic slug against allowed pattern."""
+    if not TOPIC_SLUG_REGEX.match(topic):
+        raise BadRequest("Invalid topic name")
+    return topic.lower()  # Convert to lowercase
+
+def sanitize_html(html_content):
+    """Sanitize HTML content using bleach."""
+    return bleach.clean(
+        html_content,
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRIBUTES,
+        strip=True
+    )
+
+def log_contribution(ip, user_id, action, topic, details):
+    """Log contribution metadata."""
+    logging.info(
+        f"Contribution - IP: {ip}, User: {user_id}, Action: {action}, "
+        f"Topic: {topic}, Details: {details}, Time: {datetime.utcnow()}"
+    )
 
 # --- Markdown Processing Helpers ---
 
@@ -44,10 +104,12 @@ def convert_markdown(content):
     """
     Convert Markdown text to HTML using the 'extra' and 'toc' extensions.
     Then post-process the HTML to linkify reference markers and add IDs to reference list items.
+    Finally, sanitize the HTML to prevent XSS attacks.
     """
     html = markdown.markdown(content, extensions=["extra", "toc"])
     html = linkify_references(html)
     html = add_reference_ids(html)
+    html = sanitize_html(html)  # Sanitize HTML before returning
     return html
 
 
@@ -119,35 +181,51 @@ def index():
     if request.method == "POST":
         topic = request.form.get("topic", "").strip()
         if topic:
-            return redirect(url_for("topic_page", topic=topic))
+            try:
+                topic = validate_topic_slug(topic)
+                return redirect(url_for("topic_page", topic=topic))
+            except BadRequest as e:
+                return str(e), 400
     return render_template("index.html")
 
 
 @app.route("/<topic>", methods=["GET"])
 def topic_page(topic):
-    topic = topic.strip()
-    if topic in data_store:
-        content = data_store[topic]["content"]
-    else:
-        reply_code, content = generate_topic_content(topic)
-        data_store[topic] = {"content": content, "subtopics": {}}
-    return render_template("topic.html", topic=topic, content=content)
+    try:
+        topic = validate_topic_slug(topic.strip())
+        # Check if topic exists in data store (case-insensitive)
+        topic_key = topic.lower()
+        if topic_key in data_store:
+            content = data_store[topic_key]["content"]
+        else:
+            reply_code, content = generate_topic_content(topic)
+            data_store[topic_key] = {"content": content, "subtopics": {}}
+        return render_template("topic.html", topic=topic.title(), content=content)  # Display with title case
+    except BadRequest as e:
+        return str(e), 400
 
 
 @app.route("/<topic>/<subtopic>", methods=["GET"])
 def subtopic_page(topic, subtopic):
-    topic = topic.strip()
-    subtopic = subtopic.strip()
-    if topic in data_store and subtopic in data_store[topic]["subtopics"]:
-        sub_content = data_store[topic]["subtopics"][subtopic]
-    else:
-        sub_content = "Subtopic content not available yet."
-    return render_template(
-        "topic.html", topic=topic, subtopic=subtopic, content=sub_content
-    )
+    try:
+        topic = validate_topic_slug(topic.strip())
+        subtopic = validate_topic_slug(subtopic.strip())
+        # Check if topic exists in data store (case-insensitive)
+        topic_key = topic.lower()
+        subtopic_key = subtopic.lower()
+        if topic_key in data_store and subtopic_key in data_store[topic_key]["subtopics"]:
+            sub_content = data_store[topic_key]["subtopics"][subtopic_key]
+        else:
+            sub_content = "Subtopic content not available yet."
+        return render_template(
+            "topic.html", topic=topic.title(), subtopic=subtopic.title(), content=sub_content  # Display with title case
+        )
+    except BadRequest as e:
+        return str(e), 400
 
 
 @app.route("/report", methods=["POST"])
+@limiter.limit("5 per minute")  # Rate limit reports
 def report_issue():
     """
     Expected JSON payload:
@@ -157,55 +235,79 @@ def report_issue():
        "sources": ["https://source1.com", "https://source2.com"]
     }
     """
-    data = request.get_json()
-    topic = data.get("topic")
-    report_details = data.get("report_details")
-    sources = data.get("sources")
-
-    if topic not in data_store:
-        return jsonify({"reply": "0", "message": "Topic not found."}), 404
-    current_content = data_store[topic]["content"]
-
-    prompt = (
-        f"The following encyclopedia article might contain errors:\n\n"
-        f"{current_content}\n\n"
-        f"A user reported the following issue: {report_details}\n"
-        f"Sources: {', '.join(sources)}\n\n"
-        "If the report is valid, update the article accordingly. "
-        "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) "
-        "on the first line, followed by the updated article content."
-    )
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        store=True,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful assistant for editing encyclopedia articles.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=800,
-        temperature=0.7,
-    )
-
-    text = response.choices[0].message.content.strip()
     try:
-        reply_code, updated_content = text.split("\n", 1)
-    except ValueError:
-        reply_code, updated_content = "0", current_content
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON payload"}), 400
 
-    updated_content = convert_markdown(updated_content)
-    if reply_code.strip() == "1":
-        data_store[topic]["content"] = updated_content.strip()
+        # Validate required fields
+        required_fields = ["topic", "report_details", "sources"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-    return jsonify(
-        {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
-    )
+        topic = validate_topic_slug(data["topic"])
+        report_details = bleach.clean(data["report_details"])
+        sources = [bleach.clean(url) for url in data["sources"]]
+
+        if topic not in data_store:
+            return jsonify({"reply": "0", "message": "Topic not found."}), 404
+
+        # Log the contribution
+        log_contribution(
+            request.remote_addr,
+            request.headers.get('X-User-ID', 'anonymous'),
+            'report',
+            topic,
+            report_details
+        )
+
+        current_content = data_store[topic]["content"]
+        prompt = (
+            f"The following encyclopedia article might contain errors:\n\n"
+            f"{current_content}\n\n"
+            f"A user reported the following issue: {report_details}\n"
+            f"Sources: {', '.join(sources)}\n\n"
+            "If the report is valid, update the article accordingly. "
+            "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) "
+            "on the first line, followed by the updated article content."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            store=True,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant for editing encyclopedia articles.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=800,
+            temperature=0.7,
+        )
+
+        text = response.choices[0].message.content.strip()
+        try:
+            reply_code, updated_content = text.split("\n", 1)
+        except ValueError:
+            reply_code, updated_content = "0", current_content
+
+        updated_content = convert_markdown(updated_content)
+        if reply_code.strip() == "1":
+            data_store[topic]["content"] = updated_content.strip()
+
+        return jsonify(
+            {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
+        )
+    except BadRequest as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error in report_issue: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route("/add_info", methods=["POST"])
+@limiter.limit("5 per minute")  # Rate limit additions
 def add_information():
     """
     Expected JSON payload:
@@ -216,54 +318,76 @@ def add_information():
        "sources": ["https://example.com"]
     }
     """
-    data = request.get_json()
-    topic = data.get("topic")
-    subtopic = data.get("subtopic")
-    info = data.get("info")
-    sources = data.get("sources")
-
-    if topic not in data_store:
-        return jsonify({"reply": "0", "message": "Topic not found."}), 404
-
-    prompt = (
-        f"For the article on '{topic}', the user suggests adding the following information under the subtopic '{subtopic}':\n\n"
-        f"{info}\n\n"
-        f"Sources: {', '.join(sources)}\n\n"
-        "If this information is relevant and should be added, update the article accordingly. "
-        "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) on the first line, "
-        "followed by the updated article text that includes this new subtopic section."
-    )
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        store=True,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful assistant for editing encyclopedia articles.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=800,
-        temperature=0.7,
-    )
-
-    text = response.choices[0].message.content.strip()
     try:
-        reply_code, updated_content = text.split("\n", 1)
-    except ValueError:
-        reply_code, updated_content = "0", data_store[topic]["content"]
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON payload"}), 400
 
-    updated_content = convert_markdown(updated_content)
-    if reply_code.strip() == "1":
-        data_store[topic]["content"] = updated_content.strip()
-        # Convert the added subtopic info to HTML as well.
-        data_store[topic]["subtopics"][subtopic] = convert_markdown(info.strip())
+        # Validate required fields
+        required_fields = ["topic", "subtopic", "info", "sources"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-    return jsonify(
-        {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
-    )
+        topic = validate_topic_slug(data["topic"])
+        subtopic = validate_topic_slug(data["subtopic"])
+        info = bleach.clean(data["info"])
+        sources = [bleach.clean(url) for url in data["sources"]]
+
+        if topic not in data_store:
+            return jsonify({"reply": "0", "message": "Topic not found."}), 404
+
+        # Log the contribution
+        log_contribution(
+            request.remote_addr,
+            request.headers.get('X-User-ID', 'anonymous'),
+            'add_info',
+            topic,
+            f"Added info to subtopic: {subtopic}"
+        )
+
+        prompt = (
+            f"For the article on '{topic}', the user suggests adding the following information under the subtopic '{subtopic}':\n\n"
+            f"{info}\n\n"
+            f"Sources: {', '.join(sources)}\n\n"
+            "If this information is relevant and should be added, update the article accordingly. "
+            "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) on the first line, "
+            "followed by the updated article text that includes this new subtopic section."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            store=True,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant for editing encyclopedia articles.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=800,
+            temperature=0.7,
+        )
+
+        text = response.choices[0].message.content.strip()
+        try:
+            reply_code, updated_content = text.split("\n", 1)
+        except ValueError:
+            reply_code, updated_content = "0", data_store[topic]["content"]
+
+        updated_content = convert_markdown(updated_content)
+        if reply_code.strip() == "1":
+            data_store[topic]["content"] = updated_content.strip()
+            data_store[topic]["subtopics"][subtopic] = convert_markdown(info.strip())
+
+        return jsonify(
+            {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
+        )
+    except BadRequest as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error in add_information: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)  # Disable debug mode in production

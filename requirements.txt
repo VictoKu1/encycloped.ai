@@ -1,4 +1,9 @@
 Flask
 markdown
 openai
+bleach==6.1.0
+Flask-Limiter==3.5.0
+python-dotenv==1.0.0
+Werkzeug==3.0.1
+Flask-WTF==1.2.1
 
