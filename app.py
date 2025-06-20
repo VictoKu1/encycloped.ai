@@ -3,7 +3,7 @@ import re
 import markdown
 import bleach
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -47,7 +47,7 @@ ALLOWED_ATTRIBUTES = {
 TOPIC_SLUG_REGEX = re.compile(r'^[a-zA-Z0-9_\-\s]{1,50}$')
 
 # A simple in-memory datastore for demo purposes.
-data_store = {}  # e.g., {'Python': {'content': '...', 'subtopics': {...}}}
+data_store = {}  # e.g., {'Python': {'content': '...', 'subtopics': {...}, 'generated_at': datetime}}
 
 # --- Security Helpers ---
 
@@ -176,6 +176,46 @@ def generate_topic_content(topic):
     return reply_code, content
 
 
+def is_topic_outdated(generated_at_str):
+    """Check if the topic is older than one month."""
+    try:
+        generated_at = datetime.strptime(generated_at_str, "%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return True  # If date is missing or invalid, treat as outdated
+    return datetime.utcnow() - generated_at > timedelta(days=30)
+
+
+def update_topic_content(topic, current_content):
+    """
+    Use the LLM to check for updates to the topic, keeping the structure intact.
+    """
+    prompt = (
+        f"The following is an encyclopedia article about '{topic}'. Please check if any information is outdated or missing as of today. "
+        "If there are updates, rewrite the article with the same structure and section headers, only updating the content where necessary. "
+        "If the article is already up to date, return it unchanged. Return your response starting with a reply code (1 for updated, 0 for unchanged) on the first line, followed by the article text.\n\n"
+        f"{current_content}"
+    )
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        store=True,
+        messages=[
+            {"role": "system", "content": "You are a knowledgeable encyclopedia updater."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=800,
+        temperature=0.7,
+    )
+    text = response.choices[0].message.content.strip()
+    try:
+        reply_code, content = text.split("\n", 1)
+    except ValueError:
+        reply_code, content = "0", current_content
+    # Convert the Markdown content to HTML
+    content = convert_markdown(content)
+    content = remove_duplicate_header(content, topic)
+    return reply_code, content
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -193,14 +233,27 @@ def index():
 def topic_page(topic):
     try:
         topic = validate_topic_slug(topic.strip())
-        # Check if topic exists in data store (case-insensitive)
         topic_key = topic.lower()
+        now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
         if topic_key in data_store:
+            topic_data = data_store[topic_key]
+            # Check if outdated
+            if 'generated_at' not in topic_data or is_topic_outdated(topic_data['generated_at']):
+                # Send to LLM for update
+                current_content = topic_data["content"]
+                reply_code, updated_content = update_topic_content(topic, current_content)
+                if reply_code.strip() == "1":
+                    topic_data["content"] = updated_content
+                # Update the generation date regardless
+                topic_data["generated_at"] = now_str
+                data_store[topic_key] = topic_data
             content = data_store[topic_key]["content"]
+            last_update = data_store[topic_key].get("generated_at", now_str)
         else:
             reply_code, content = generate_topic_content(topic)
-            data_store[topic_key] = {"content": content, "subtopics": {}}
-        return render_template("topic.html", topic=topic.title(), content=content)  # Display with title case
+            data_store[topic_key] = {"content": content, "subtopics": {}, "generated_at": now_str}
+            last_update = now_str
+        return render_template("topic.html", topic=topic.title(), content=content, last_update=last_update)
     except BadRequest as e:
         return str(e), 400
 

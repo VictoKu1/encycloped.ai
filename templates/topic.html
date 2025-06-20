@@ -32,7 +32,12 @@
       <header class="page-topic-header">
         <h1>{{ topic }}</h1>
       </header>
-      <div id="article-content">{{ content|safe }}</div>
+      <div id="article-content">
+        {{ content|safe }}
+        <p style="font-size:0.95em;color:#888;margin-top:10px;text-align:left;">
+          Last updated: {{ last_update|replace('T', ' ') }}
+        </p>
+      </div>
       <!-- Other elements like modals go here -->
 
        <!-- Button to open the modal -->
