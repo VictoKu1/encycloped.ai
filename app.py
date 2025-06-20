@@ -9,6 +9,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from openai import OpenAI
 from werkzeug.exceptions import BadRequest
+from bs4 import BeautifulSoup
 
 # Configure logging
 logging.basicConfig(
@@ -165,15 +166,12 @@ def generate_topic_content(topic):
 
     text = response.choices[0].message.content.strip()
     try:
-        reply_code, content = text.split("\n", 1)
+        reply_code, markdown_content = text.split("\n", 1)
     except ValueError:
-        reply_code, content = "0", text
+        reply_code, markdown_content = "0", text
 
-    # Convert the Markdown content to HTML
-    content = convert_markdown(content)
-    # Remove duplicate header if it repeats the topic
-    content = remove_duplicate_header(content, topic)
-    return reply_code, content
+    # Do NOT convert to HTML here; return markdown_content
+    return reply_code, markdown_content
 
 
 def is_topic_outdated(generated_at_str):
@@ -216,6 +214,39 @@ def update_topic_content(topic, current_content):
     return reply_code, content
 
 
+def extract_topic_suggestions(article_text):
+    """
+    Use the LLM to extract a list of potential new article topics (words or phrases) from the article text.
+    Returns a list of strings.
+    """
+    prompt = (
+        "Analyze the following encyclopedia article and extract a list of words or phrases that would make good new article topics. "
+        "Return only a Python list of strings, sorted by relevance, with longer phrases before their subwords if both are present. "
+        "Do not include the main topic itself.\n\n"
+        f"{article_text}"
+    )
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        store=True,
+        messages=[
+            {"role": "system", "content": "You are an assistant that extracts topic suggestions from encyclopedia articles."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=300,
+        temperature=0.3,
+    )
+    # Try to safely evaluate the list from the LLM response
+    import ast
+    text = response.choices[0].message.content.strip()
+    try:
+        suggestions = ast.literal_eval(text)
+        if not isinstance(suggestions, list):
+            suggestions = []
+    except Exception:
+        suggestions = []
+    return suggestions
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -249,11 +280,49 @@ def topic_page(topic):
                 data_store[topic_key] = topic_data
             content = data_store[topic_key]["content"]
             last_update = data_store[topic_key].get("generated_at", now_str)
+            # Try to get the markdown version if available, else fallback to HTML->text
+            markdown_content = data_store[topic_key].get("markdown", None)
+            if not markdown_content:
+                soup = BeautifulSoup(content, "html.parser")
+                markdown_content = soup.get_text(" ")
         else:
-            reply_code, content = generate_topic_content(topic)
-            data_store[topic_key] = {"content": content, "subtopics": {}, "generated_at": now_str}
+            reply_code, markdown_content = generate_topic_content(topic)
+            data_store[topic_key] = {"content": None, "subtopics": {}, "generated_at": now_str, "markdown": markdown_content}
             last_update = now_str
-        return render_template("topic.html", topic=topic.title(), content=content, last_update=last_update)
+        # Extract topic suggestions from the article's markdown
+        topic_suggestions = extract_topic_suggestions(markdown_content)
+        # Remove suggestions that are substrings of longer suggestions in the same list
+        topic_suggestions = sorted(topic_suggestions, key=lambda x: -len(x))
+        filtered = []
+        for i, s in enumerate(topic_suggestions):
+            if not any(s != t and s in t for t in topic_suggestions):
+                filtered.append(s)
+        topic_suggestions = filtered
+        # Linkify the markdown content for suggested topics
+        def linkify_topics(md, suggestions):
+            import re
+            # Sort by length descending to prioritize longer phrases
+            suggestions = sorted(suggestions, key=lambda x: -len(x))
+            used = set()
+            def replacer(match):
+                phrase = match.group(0)
+                if phrase in used:
+                    return phrase
+                used.add(phrase)
+                url = "/" + phrase.replace(" ", "%20")
+                return f"[{phrase}]({url})"
+            # Avoid linking inside existing markdown links
+            for phrase in suggestions:
+                # Regex: match phrase not inside []()
+                pattern = r'(?<!\[)\b' + re.escape(phrase) + r'\b(?![^\[]*\])'
+                md = re.sub(pattern, replacer, md, flags=re.IGNORECASE)
+            return md
+        linked_markdown = linkify_topics(markdown_content, topic_suggestions)
+        html_content = convert_markdown(linked_markdown)
+        # Save the markdown for future use
+        data_store[topic_key]["markdown"] = markdown_content
+        data_store[topic_key]["content"] = html_content
+        return render_template("topic.html", topic=topic.title(), content=html_content, last_update=last_update)
     except BadRequest as e:
         return str(e), 400
 
