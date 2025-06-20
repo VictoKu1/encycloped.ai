@@ -1,20 +1,20 @@
 # encycloped.ai (AI Moderated Encyclopedia)
 
-**encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
+**encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT 4.1 (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT 4.1 (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
 
 ## Features
 
 - **Dynamic Content Generation:**  
-  Automatically generate encyclopedia articles on-the-fly using ChatGPT (or any other LLM with an API) with full citations.
+  Automatically generate encyclopedia articles on-the-fly using ChatGPT 4.1 (or any other LLM with an API) with full citations.
 
 - **Topic and Subtopic Navigation:**  
   Access articles via URL paths (e.g., `/Python`) and subtopics using anchors (`#subtopic`) or paths (e.g., `/Python/libraries`).
 
 - **User Feedback:**  
-  Users can report issues or suggest additional information through intuitive modals. Feedback is sent to the ChatGPT (or any other LLM with an API) API for validation and content updates.
+  Users can report issues or suggest additional information through intuitive modals. Feedback is sent to the ChatGPT 4.1 (or any other LLM with an API) API for validation and content updates.
 
 - **AI Moderation:**  
-  The system leverages AI to review and integrate user contributions, ensuring that the content remains both accurate and reliable.
+  The system leverages AI (ChatGPT 4.1 or compatible) to review and integrate user contributions, ensuring that the content remains both accurate and reliable.
 
 - **Community-Driven:**  
   Open-source and decentralized, contributions are welcome from anyone. However, final control and integration of contributions remain with the project maintainers, ensuring consistency and quality.
@@ -128,7 +128,7 @@ By default, the application runs in debug mode on `http://127.0.0.1:5000/`. Open
   View the generated article along with citations. Use the "Report an Issue" button to flag inaccuracies or the "Add Missing Information" button to contribute extra details or subtopics.
 
 - **User Feedback:**  
-  Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the ChatGPT (or any other LLM with an API) API before updating the article content.
+  Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the ChatGPT 4.1 (or any other LLM with an API) API before updating the article content.
 
 ## Security Considerations
 
@@ -149,7 +149,7 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](LICE
 ## Acknowledgments
 
 - [Flask](https://flask.palletsprojects.com/) – The web framework powering this project.
-- [OpenAI](https://openai.com/) – For providing the ChatGPT API.
+- [OpenAI](https://openai.com/) – For providing the ChatGPT 4.1 API.
 - The open-source community – For their inspiration and continuous contributions.
 - Wikipedia and other collaborative knowledge-sharing platforms – For inspiring a decentralized approach to knowledge.
 

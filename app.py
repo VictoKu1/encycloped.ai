@@ -150,7 +150,7 @@ def generate_topic_content(topic):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",  # Adjust if needed
+        model="gpt-4.1",  # Adjust if needed
         store=True,
         messages=[
             {
