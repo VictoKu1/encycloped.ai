@@ -319,6 +319,7 @@ def topic_page(topic):
             return md
         linked_markdown = linkify_topics(markdown_content, topic_suggestions)
         html_content = convert_markdown(linked_markdown)
+        html_content = remove_duplicate_header(html_content, topic)
         # Save the markdown for future use
         data_store[topic_key]["markdown"] = markdown_content
         data_store[topic_key]["content"] = html_content

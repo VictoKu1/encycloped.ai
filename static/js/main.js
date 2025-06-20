@@ -81,6 +81,41 @@ $(document).ready( function () {
             }
         });
     });
+
+    // Spinner overlay logic
+    function showSpinner() {
+        if ($('.spinner-overlay').length === 0) {
+            $('body').append('<div class="spinner-overlay"><div class="spinner"></div></div>');
+        }
+    }
+    function hideSpinner() {
+        $('.spinner-overlay').remove();
+    }
+
+    // Show spinner on search submit
+    $(document).on('submit', 'form[action="/"], form[action^="/"]', function(e) {
+        showSpinner();
+    });
+    // Show spinner on topic link click
+    $(document).on('click', 'a', function(e) {
+        var href = $(this).attr('href');
+        if (href && href.startsWith('/') && !href.startsWith('/static/')) {
+            showSpinner();
+        }
+    });
+    // Hide spinner when content is loaded
+    $(window).on('load', function() {
+        hideSpinner();
+    });
+    // Hide spinner after AJAX loads article content
+    $(document).ajaxComplete(function() {
+        hideSpinner();
+    });
+
+    // Show spinner immediately on topic pages (not main index)
+    if ($('#article-content').length > 0) {
+        showSpinner();
+    }
 });
 
 
