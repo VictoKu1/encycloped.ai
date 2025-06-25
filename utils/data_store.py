@@ -1,14 +1,11 @@
 """
 Data Store Utilities
-Handles in-memory data storage and topic lifecycle management.
+Handles persistent data storage and topic lifecycle management using PostgreSQL.
 """
 
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-
-
-# A simple in-memory datastore for demo purposes.
-data_store = {}  # e.g., {'Python': {'content': '...', 'subtopics': {...}, 'generated_at': datetime, 'markdown': '...'}}
+from utils import db
 
 
 def is_topic_outdated(generated_at_str):
@@ -21,28 +18,25 @@ def is_topic_outdated(generated_at_str):
 
 
 def get_topic_data(topic_key):
-    """Get topic data from the data store."""
-    return data_store.get(topic_key)
+    """Get topic data from the database."""
+    topic = db.get_topic(topic_key)
+    if not topic:
+        return None
+    # Convert generated_at to string for compatibility
+    topic['generated_at'] = topic['generated_at'].strftime("%Y-%m-%dT%H:%M:%S")
+    return topic
 
 
 def save_topic_data(topic_key, content, markdown_content, subtopics=None):
-    """Save topic data to the data store."""
-    now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-    data_store[topic_key] = {
-        "content": content,
-        "subtopics": subtopics or {},
-        "generated_at": now_str,
-        "markdown": markdown_content
-    }
+    """Save topic data to the database."""
+    db.save_topic(topic_key, content, markdown_content)
 
 
 def update_topic_content(topic_key, content, markdown_content=None):
-    """Update existing topic content."""
-    if topic_key in data_store:
-        data_store[topic_key]["content"] = content
-        if markdown_content:
-            data_store[topic_key]["markdown"] = markdown_content
-        data_store[topic_key]["generated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    """Update existing topic content in the database."""
+    topic = db.get_topic(topic_key)
+    if topic:
+        db.save_topic(topic_key, content, markdown_content or topic.get('markdown'))
 
 
 def get_markdown_from_html(html_content):
@@ -52,16 +46,15 @@ def get_markdown_from_html(html_content):
 
 
 def topic_exists(topic_key):
-    """Check if a topic exists in the data store."""
-    return topic_key in data_store
+    """Check if a topic exists in the database."""
+    return db.get_topic(topic_key) is not None
 
 
 def get_all_topics():
-    """Get all topics from the data store."""
-    return list(data_store.keys())
+    """Get all topics from the database."""
+    return db.get_all_topics()
 
 
 def clear_data_store():
-    """Clear the data store (useful for testing)."""
-    global data_store
-    data_store = {} 
+    """Not implemented: Clearing the database is not supported in production."""
+    pass 

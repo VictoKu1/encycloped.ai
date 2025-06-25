@@ -7,8 +7,9 @@ Flask-Limiter
 python-dotenv
 Werkzeug
 Flask-WTF
-
-
+flask_sqlalchemy 
+psycopg2-binary
+sqlalchemy
 
 
 

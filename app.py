@@ -30,8 +30,8 @@ from content.markdown_processor import (
     remove_duplicate_header, 
     linkify_topics
 )
+from utils import db
 from utils.data_store import (
-    data_store, 
     is_topic_outdated, 
     get_topic_data, 
     save_topic_data, 
@@ -56,6 +56,8 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"]
 )
+
+db.init_db()  # Initialize the database schema at startup
 
 
 @app.route("/", methods=["GET", "POST"])

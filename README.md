@@ -43,27 +43,6 @@
   - Error handling and logging
   - Secure session management
 
-## Project Structure
-
-```plaintext
-encycloped.ai/
-├── app.py                  # Main Flask application
-├── requirements.txt        # Python dependencies
-├── README.md               # This file
-├── CONTRIBUTING.md         # Guidelines for contributing
-├── CODE_OF_CONDUCT.md      # Code of conduct for contributors
-├── LICENSE                 # Project license (GPL v3)
-├── templates/
-│   ├── base.html           # Base HTML template
-│   ├── index.html          # Homepage with search functionality
-│   └── topic.html          # Template for displaying topics and subtopics
-└── static/
-    ├── css/
-    │   └── style.css       # CSS styling for the project
-    └── js/
-        └── main.js         # JavaScript for interactivity and AJAX calls
-```
-
 ## Installation
 
 1. **Clone the Repository:**
@@ -80,44 +59,71 @@ encycloped.ai/
    source venv/bin/activate  # On Windows: .\venv\Scripts\activate
    ```
 
-3. **Install the Dependencies:**
+3. **Install Python Dependencies:**
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configure Environment Variables:**
+---
 
-   Create a `.env` file (or set the environment variables directly) to configure your API key, for example:
-  
-   Linux:
-   
-   ```bash
-   export OPENAI_API_KEY=your_openai_api_key
-   ```
-  
-   Windows:
-   
-   - Using CMD:
-    ```cmd
-    set OPENAI_API_KEY=your_openai_api_key
-    ```
-   
-   - Using PowerShell:
-   
-    ```powershell
-    $env:OPENAI_API_KEY="your_openai_api_key"
-    ``` 
+## Database & Project Setup (Step-by-Step)
 
-## Running Locally
+Follow these steps to set up the PostgreSQL database and run the project. You do NOT need to run all commands in the same terminal, but you may find it convenient to use multiple terminals for different steps.
 
-To run the Flask application locally, execute:
+### 1. Start Docker/PostgreSQL
+Open any terminal and run:
+```bash
+docker-compose up -d
+```
+This starts the PostgreSQL database in the background. You can close this terminal or use it for other commands.
 
+### 2. Set Environment Variables
+Set the following environment variables in the terminal where you will run the app and the database initialization script. You can also use a `.env` file if your app loads it automatically.
+
+**Linux/macOS:**
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=encyclopedai
+export DB_USER=encyclo_user
+export DB_PASSWORD=encyclo_pass
+```
+**Windows PowerShell:**
+```powershell
+$env:DB_HOST="localhost"
+$env:DB_PORT="5432"
+$env:DB_NAME="encyclopedai"
+$env:DB_USER="encyclo_user"
+$env:DB_PASSWORD="encyclo_pass"
+```
+
+### 3. Initialize the Database Schema (Run Once)
+In any terminal (after Docker is running and dependencies are installed):
+```bash
+python utils/db.py --init
+```
+This creates the necessary tables for topics and logs. You only need to run this once (or after making schema changes).
+
+### 4. Run the Flask App
+In a new terminal (so you can keep it open while using the app):
 ```bash
 python app.py
 ```
+Leave this terminal open while you use the app in your browser.
 
-By default, the application runs in debug mode on `http://127.0.0.1:5000/`. Open your browser and navigate to that URL to start exploring topics.
+---
+
+### **Summary Table**
+
+| Step                        | Can be in any terminal? | Needs to stay open? |
+|-----------------------------|:----------------------:|:------------------:|
+| `docker-compose up -d`      | Yes                    | No                 |
+| `pip install -r requirements.txt` | Yes            | No                 |
+| `python utils/db.py --init` | Yes                    | No                 |
+| `python app.py`             | Yes                    | Yes (keep open)    |
+
+---
 
 ## Usage
 
