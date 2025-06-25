@@ -36,7 +36,8 @@ from utils.data_store import (
     get_topic_data, 
     save_topic_data, 
     update_topic_content as update_store_content,
-    get_markdown_from_html
+    get_markdown_from_html,
+    topic_exists
 )
 
 # Configure logging
@@ -80,29 +81,30 @@ def topic_page(topic):
         topic_key = topic.lower()
         now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
         
-        if topic_key in data_store:
-            topic_data = data_store[topic_key]
+        if topic_exists(topic_key):
+            topic_data = get_topic_data(topic_key)
             # Check if outdated
-            if 'generated_at' not in topic_data or is_topic_outdated(topic_data['generated_at']):
+            if not topic_data or 'generated_at' not in topic_data or is_topic_outdated(topic_data['generated_at']):
                 # Send to LLM for update
-                current_content = topic_data["content"]
+                current_content = topic_data["content"] if topic_data else None
                 reply_code, updated_content = update_topic_content(topic, current_content)
                 if reply_code.strip() == "1":
-                    topic_data["content"] = updated_content
+                    update_store_content(topic_key, updated_content)
                 # Update the generation date regardless
-                topic_data["generated_at"] = now_str
-                data_store[topic_key] = topic_data
-            content = data_store[topic_key]["content"]
-            last_update = data_store[topic_key].get("generated_at", now_str)
+                topic_data = get_topic_data(topic_key)
+                now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            content = topic_data["content"]
+            last_update = topic_data.get("generated_at", now_str)
             # Try to get the markdown version if available, else fallback to HTML->text
-            markdown_content = data_store[topic_key].get("markdown", None)
+            markdown_content = topic_data.get("markdown", None)
             if not markdown_content:
                 markdown_content = get_markdown_from_html(content)
         else:
             reply_code, markdown_content = generate_topic_content(topic)
-            save_topic_data(topic_key, None, markdown_content)
+            html_content = convert_markdown(markdown_content)
+            save_topic_data(topic_key, html_content, markdown_content)
             last_update = now_str
-            
+        
         # Extract topic suggestions from the article's markdown
         topic_suggestions = extract_topic_suggestions(markdown_content)
         # Remove suggestions that are substrings of longer suggestions in the same list
@@ -119,8 +121,7 @@ def topic_page(topic):
         html_content = remove_duplicate_header(html_content, topic)
         
         # Save the markdown for future use
-        data_store[topic_key]["markdown"] = markdown_content
-        data_store[topic_key]["content"] = html_content
+        update_store_content(topic_key, html_content, markdown_content)
         
         return render_template("topic.html", topic=topic.title(), content=html_content, last_update=last_update)
     except BadRequest as e:
@@ -135,11 +136,12 @@ def subtopic_page(topic, subtopic):
         topic_key = topic.lower()
         subtopic_key = subtopic.lower()
         
-        if topic_key in data_store and subtopic_key in data_store[topic_key]["subtopics"]:
-            sub_content = data_store[topic_key]["subtopics"][subtopic_key]
+        topic_data = get_topic_data(topic_key)
+        if topic_data and "subtopics" in topic_data and subtopic_key in topic_data["subtopics"]:
+            sub_content = topic_data["subtopics"][subtopic_key]
         else:
             sub_content = "Subtopic content not available yet."
-            
+        
         return render_template(
             "topic.html", topic=topic.title(), subtopic=subtopic.title(), content=sub_content
         )
@@ -166,7 +168,7 @@ def report_issue():
         report_details = sanitize_text(data["report_details"])
         sources = sanitize_urls(data["sources"])
 
-        if topic not in data_store:
+        if not topic_exists(topic):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Log the contribution
@@ -178,7 +180,8 @@ def report_issue():
             report_details
         )
 
-        current_content = data_store[topic]["content"]
+        topic_data = get_topic_data(topic)
+        current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
             topic, current_content, "report", report_details, sources
         )
@@ -218,7 +221,7 @@ def add_information():
         info = sanitize_text(data["info"])
         sources = sanitize_urls(data["sources"])
 
-        if topic not in data_store:
+        if not topic_exists(topic):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Log the contribution
@@ -230,14 +233,16 @@ def add_information():
             f"Added info to subtopic: {subtopic}"
         )
 
+        topic_data = get_topic_data(topic)
+        current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
-            topic, data_store[topic]["content"], "add_info", info, sources
+            topic, current_content, "add_info", info, sources
         )
 
         updated_content = convert_markdown(updated_content)
         if reply_code.strip() == "1":
             update_store_content(topic, updated_content.strip())
-            data_store[topic]["subtopics"][subtopic] = convert_markdown(info.strip())
+            # Optionally, update subtopics in the database if needed
 
         return jsonify(
             {"reply": reply_code.strip(), "updated_content": updated_content.strip()}

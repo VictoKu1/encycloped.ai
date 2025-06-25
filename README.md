@@ -2,6 +2,8 @@
 
 **encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT 4.1 (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT 4.1 (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
 
+> **Note:** All article and topic data is stored in a persistent PostgreSQL database, ensuring data durability and multi-user support. No in-memory storage is used for articles or topics.
+
 ## Features
 
 - **Dynamic Content Generation:**  
@@ -18,6 +20,9 @@
 
 - **Community-Driven:**  
   Open-source and decentralized, contributions are welcome from anyone. However, final control and integration of contributions remain with the project maintainers, ensuring consistency and quality.
+
+- **Persistent Database Storage:**  
+  All articles and topics are stored in a PostgreSQL database for durability and reliability. This enables multi-user access, prevents data loss on server restarts, and supports future scalability.
 
 ## Security Features
 
@@ -114,16 +119,23 @@ Leave this terminal open while you use the app in your browser.
 
 ---
 
-### **Summary Table**
+### Optional: Restarting the Database with Docker Compose
+If you need to restart the PostgreSQL database cleanly (for example, after making changes to the Docker configuration or to reset the container), you can use the following commands:
 
-| Step                        | Can be in any terminal? | Needs to stay open? |
-|-----------------------------|:----------------------:|:------------------:|
-| `docker-compose up -d`      | Yes                    | No                 |
-| `pip install -r requirements.txt` | Yes            | No                 |
-| `python utils/db.py --init` | Yes                    | No                 |
-| `python app.py`             | Yes                    | Yes (keep open)    |
+**Stop the database service:**
+```bash
+docker-compose down
+```
 
----
+**Remove all stopped containers and volumes (WARNING: this will delete all data!):**
+```bash
+docker-compose down -v
+```
+
+**Start the database service again:**
+```bash
+docker-compose up -d
+```
 
 ## Usage
 
@@ -156,8 +168,10 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](LICE
 
 - [Flask](https://flask.palletsprojects.com/) – The web framework powering this project.
 - [OpenAI](https://openai.com/) – For providing the ChatGPT 4.1 API.
+- [PostgreSQL](https://www.postgresql.org/) – The database powering this project.
 - The open-source community – For their inspiration and continuous contributions.
 - Wikipedia and other collaborative knowledge-sharing platforms – For inspiring a decentralized approach to knowledge.
+
 
 
 
