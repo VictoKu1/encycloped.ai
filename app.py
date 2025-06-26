@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.exceptions import BadRequest
+import hashlib
 
 # Import from our modular packages
 from agents.topic_generator import (
@@ -50,6 +51,9 @@ logging.basicConfig(
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
+# Configure Flask-Limiter to use Redis as storage backend for rate limiting
+redis_host = os.environ.get('REDIS_HOST', 'localhost')
+app.config['RATELIMIT_STORAGE_URI'] = f'redis://{redis_host}:6379/0'
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -80,50 +84,62 @@ def topic_page(topic):
         topic = validate_topic_slug(topic.strip())
         topic_key = topic.lower()
         now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-        
-        if topic_exists(topic_key):
-            topic_data = get_topic_data(topic_key)
-            # Check if outdated
-            if not topic_data or 'generated_at' not in topic_data or is_topic_outdated(topic_data['generated_at']):
-                # Send to LLM for update
-                current_content = topic_data["content"] if topic_data else None
-                reply_code, updated_content = update_topic_content(topic, current_content)
-                if reply_code.strip() == "1":
-                    update_store_content(topic_key, updated_content)
-                # Update the generation date regardless
-                topic_data = get_topic_data(topic_key)
-                now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-            content = topic_data["content"]
-            last_update = topic_data.get("generated_at", now_str)
-            # Try to get the markdown version if available, else fallback to HTML->text
-            markdown_content = topic_data.get("markdown", None)
-            if not markdown_content:
-                markdown_content = get_markdown_from_html(content)
-        else:
+        topic_data = get_topic_data(topic_key)
+        gen_at = topic_data.get('generated_at') if topic_data else None
+        is_outdated = is_topic_outdated(gen_at) if gen_at else True
+
+        # Default values
+        markdown_content = None
+        html_content = None
+        last_update = now_str
+        topic_suggestions = []
+
+        if not topic_data:
+            logging.info(f"[DEBUG] Will call OpenAI: topic_data is None (topic not in DB)")
             reply_code, markdown_content = generate_topic_content(topic)
-            html_content = convert_markdown(markdown_content)
-            save_topic_data(topic_key, html_content, markdown_content)
+            topic_suggestions = extract_topic_suggestions(markdown_content)
+            html_content = convert_markdown(linkify_topics(markdown_content, topic_suggestions))
+            save_topic_data(topic_key, html_content, markdown_content, topic_suggestions)
             last_update = now_str
-        
-        # Extract topic suggestions from the article's markdown
-        topic_suggestions = extract_topic_suggestions(markdown_content)
-        # Remove suggestions that are substrings of longer suggestions in the same list
-        topic_suggestions = sorted(topic_suggestions, key=lambda x: -len(x))
+            topic_data = get_topic_data(topic_key)
+        elif is_outdated:
+            logging.info(f"[DEBUG] Will call OpenAI: topic is outdated")
+            current_content = topic_data["content"]
+            reply_code, updated_content = update_topic_content(topic, current_content)
+            if reply_code.strip() == "1":
+                # Regenerate markdown and topic suggestions
+                markdown_content = updated_content
+                topic_suggestions = extract_topic_suggestions(markdown_content)
+                html_content = convert_markdown(linkify_topics(markdown_content, topic_suggestions))
+                save_topic_data(topic_key, html_content, markdown_content, topic_suggestions)
+                last_update = now_str
+                topic_data = get_topic_data(topic_key)
+        else:
+            logging.info(f"[DEBUG] Will NOT call OpenAI: topic is present and not outdated")
+            last_update = topic_data.get("generated_at", now_str)
+            topic_suggestions = topic_data.get("topic_suggestions", [])
+
+        # Use only the data from the database for rendering
+        content = topic_data["content"]
+        markdown_content = topic_data.get("markdown", None)
+        if not markdown_content:
+            # If markdown is missing, show an error message
+            html_content_final = '<p><em>Error: Article markdown missing. Please regenerate the article.</em></p>'
+            return render_template("topic.html", topic=topic.title(), content=html_content_final, last_update=last_update, topic_suggestions=topic_suggestions)
+
+        # Only linkify using the topic_suggestions from DB or just generated
+        topic_suggestions = sorted(topic_suggestions, key=lambda x: -len(x)) if topic_suggestions else []
         filtered = []
         for i, s in enumerate(topic_suggestions):
             if not any(s != t and s in t for t in topic_suggestions):
                 filtered.append(s)
         topic_suggestions = filtered
-        
-        # Linkify the markdown content for suggested topics
+
         linked_markdown = linkify_topics(markdown_content, topic_suggestions)
-        html_content = convert_markdown(linked_markdown)
-        html_content = remove_duplicate_header(html_content, topic)
-        
-        # Save the markdown for future use
-        update_store_content(topic_key, html_content, markdown_content)
-        
-        return render_template("topic.html", topic=topic.title(), content=html_content, last_update=last_update)
+        html_content_final = convert_markdown(linked_markdown)
+        html_content_final = remove_duplicate_header(html_content_final, topic)
+
+        return render_template("topic.html", topic=topic.title(), content=html_content_final, last_update=last_update, topic_suggestions=topic_suggestions)
     except BadRequest as e:
         return str(e), 400
 

@@ -23,7 +23,8 @@ def init_db():
                 topic_key TEXT UNIQUE NOT NULL,
                 content TEXT NOT NULL,
                 markdown TEXT,
-                generated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                topic_suggestions JSONB
             );
             ''')
             cur.execute('''
@@ -36,17 +37,18 @@ def init_db():
             ''')
         conn.commit()
 
-def save_topic(topic_key, content, markdown):
+def save_topic(topic_key, content, markdown, topic_suggestions=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('''
-                INSERT INTO topics (topic_key, content, markdown, generated_at)
-                VALUES (%s, %s, %s, NOW())
+                INSERT INTO topics (topic_key, content, markdown, generated_at, topic_suggestions)
+                VALUES (%s, %s, %s, NOW(), %s)
                 ON CONFLICT (topic_key) DO UPDATE SET
                     content = EXCLUDED.content,
                     markdown = EXCLUDED.markdown,
-                    generated_at = NOW();
-            ''', (topic_key, content, markdown))
+                    generated_at = NOW(),
+                    topic_suggestions = EXCLUDED.topic_suggestions;
+            ''', (topic_key, content, markdown, topic_suggestions))
         conn.commit()
 
 def get_topic(topic_key):

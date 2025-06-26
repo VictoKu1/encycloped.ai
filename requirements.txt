@@ -2,6 +2,7 @@ Flask
 markdown
 openai
 bleach
+redis
 bs4
 Flask-Limiter
 python-dotenv
@@ -10,6 +11,4 @@ Flask-WTF
 flask_sqlalchemy 
 psycopg2-binary
 sqlalchemy
-
-
 

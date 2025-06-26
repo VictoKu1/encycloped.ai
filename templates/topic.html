@@ -36,14 +36,6 @@
         {{ content|safe }}
         <div style="margin-top:10px;text-align:left;">
           <p style="font-size:0.95em;color:#888;margin-bottom:4px;">Last updated: {{ last_update|replace('T', ' ') }}</p>
-          {% if topic_suggestions and topic_suggestions|length > 0 %}
-            <div style="margin-top:8px;">
-              <span style="font-size:1em;color:#333;font-weight:bold;">Suggested topics:</span>
-              {% for suggestion in topic_suggestions %}
-                <a href="/{{ suggestion|replace(' ', '%20') }}" style="margin-right:10px;font-size:0.98em;">{{ suggestion }}</a>
-              {% endfor %}
-            </div>
-          {% endif %}
         </div>
       </div>
       <!-- Other elements like modals go here -->

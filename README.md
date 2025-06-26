@@ -48,6 +48,19 @@
   - Error handling and logging
   - Secure session management
 
+
+- **Flask App**: Handles all web requests, user feedback, and article generation.
+- **OpenAI API**: Used for generating and updating encyclopedia articles and topic suggestions.
+- **PostgreSQL**: Stores all articles, markdown, topic suggestions, and logs—**persistent, durable storage**.
+- **Redis**: Used **only for rate limiting** (not for article data)—ensures fair usage and protects against abuse, even in a distributed/multi-instance setup.
+
+## Why Redis and PostgreSQL?
+
+- **PostgreSQL** is a robust, persistent database for all encyclopedia content and logs.
+- **Redis** is a fast, in-memory data store used for **rate limiting**.  
+  - Rate limiting requires atomic, high-speed operations and must be shared across all app instances.
+  - Redis is the industry standard for this use case; PostgreSQL is not suitable for distributed rate limiting.
+
 ## Installation
 
 1. **Clone the Repository:**
@@ -70,18 +83,41 @@
    pip install -r requirements.txt
    ```
 
+4. **Configure Environment Variables:**
+
+   Create a `.env` file (or set the environment variables directly) to configure your API key, for example:
+  
+   Linux:
+   
+   ```bash
+   export OPENAI_API_KEY=your_openai_api_key
+   ```
+  
+   Windows:
+   
+   - Using CMD:
+    ```cmd
+    set OPENAI_API_KEY=your_openai_api_key
+    ```
+   
+   - Using PowerShell:
+   
+    ```powershell
+    $env:OPENAI_API_KEY="your_openai_api_key"
+    ``` 
+
 ---
 
 ## Database & Project Setup (Step-by-Step)
 
-Follow these steps to set up the PostgreSQL database and run the project. You do NOT need to run all commands in the same terminal, but you may find it convenient to use multiple terminals for different steps.
+Follow these steps to set up the PostgreSQL database and Redis for rate limiting, and run the project. You do NOT need to run all commands in the same terminal, but you may find it convenient to use multiple terminals for different steps.
 
-### 1. Start Docker/PostgreSQL
+### 1. Start Docker/PostgreSQL/Redis
 Open any terminal and run:
 ```bash
 docker-compose up -d
 ```
-This starts the PostgreSQL database in the background. You can close this terminal or use it for other commands.
+This starts the PostgreSQL database **and Redis** in the background. You can close this terminal or use it for other commands.
 
 ### 2. Set Environment Variables
 Set the following environment variables in the terminal where you will run the app and the database initialization script. You can also use a `.env` file if your app loads it automatically.
@@ -93,6 +129,7 @@ export DB_PORT=5432
 export DB_NAME=encyclopedai
 export DB_USER=encyclo_user
 export DB_PASSWORD=encyclo_pass
+export REDIS_HOST=localhost
 ```
 **Windows PowerShell:**
 ```powershell
@@ -101,7 +138,10 @@ $env:DB_PORT="5432"
 $env:DB_NAME="encyclopedai"
 $env:DB_USER="encyclo_user"
 $env:DB_PASSWORD="encyclo_pass"
+$env:REDIS_HOST="localhost"
 ```
+
+- In production/Docker, set `REDIS_HOST=redis`.
 
 ### 3. Initialize the Database Schema (Run Once)
 In any terminal (after Docker is running and dependencies are installed):
@@ -169,6 +209,8 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](LICE
 - [Flask](https://flask.palletsprojects.com/) – The web framework powering this project.
 - [OpenAI](https://openai.com/) – For providing the ChatGPT 4.1 API.
 - [PostgreSQL](https://www.postgresql.org/) – The database powering this project.
+- [Redis](https://redis.io/) – The rate limiting database powering this project.
+- [Docker](https://www.docker.com/) – The containerization platform powering this project.
 - The open-source community – For their inspiration and continuous contributions.
 - Wikipedia and other collaborative knowledge-sharing platforms – For inspiring a decentralized approach to knowledge.
 

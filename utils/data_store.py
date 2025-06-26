@@ -6,6 +6,7 @@ Handles persistent data storage and topic lifecycle management using PostgreSQL.
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from utils import db
+import json
 
 
 def is_topic_outdated(generated_at_str):
@@ -24,19 +25,35 @@ def get_topic_data(topic_key):
         return None
     # Convert generated_at to string for compatibility
     topic['generated_at'] = topic['generated_at'].strftime("%Y-%m-%dT%H:%M:%S")
+    # Parse topic_suggestions robustly
+    ts = topic.get('topic_suggestions')
+    if isinstance(ts, str):
+        try:
+            topic['topic_suggestions'] = json.loads(ts)
+        except Exception:
+            topic['topic_suggestions'] = []
+    elif isinstance(ts, list):
+        topic['topic_suggestions'] = ts
+    elif ts is None:
+        topic['topic_suggestions'] = []
+    else:
+        # Unexpected type
+        topic['topic_suggestions'] = []
     return topic
 
 
-def save_topic_data(topic_key, content, markdown_content, subtopics=None):
+def save_topic_data(topic_key, content, markdown_content, topic_suggestions=None):
     """Save topic data to the database."""
-    db.save_topic(topic_key, content, markdown_content)
+    db.save_topic(topic_key, content, markdown_content, json.dumps(topic_suggestions) if topic_suggestions else None)
 
 
 def update_topic_content(topic_key, content, markdown_content=None):
     """Update existing topic content in the database."""
     topic = db.get_topic(topic_key)
     if topic:
-        db.save_topic(topic_key, content, markdown_content or topic.get('markdown'))
+        # Only update if content or markdown is different
+        if content != topic.get('content') or (markdown_content and markdown_content != topic.get('markdown')):
+            db.save_topic(topic_key, content, markdown_content or topic.get('markdown'))
 
 
 def get_markdown_from_html(html_content):
