@@ -5,6 +5,7 @@ Handles LLM interactions for generating and updating encyclopedia articles.
 
 import os
 from openai import OpenAI
+import logging
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -13,15 +14,19 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 def generate_topic_content(topic):
     """
     Call the OpenAI Chat API to generate an encyclopedia-style article with Markdown formatting.
-    The article will include clear section headers and a separate References section.
+    If the topic is ambiguous (has multiple common meanings), do NOT generate an article. Instead, return a short intro sentence (e.g., 'The topic <topic> may have several meanings, did you mean:'), then a numbered list (one per line, e.g., '1. topic (option1)'), and return the special code 45 as the reply code. If the topic is unambiguous, generate the article as before.
     """
     prompt = (
-        f"Write an encyclopedia-style article about '{topic}' using Markdown formatting. "
-        "Divide the article into clear sections with headers such as 'TL;DR' 'Overview', 'History', "
-        "'Features and Syntax', 'Applications', and 'Community and Development'. "
-        "At the end, include a 'References' section. In that section, list each reference on a separate line as a Markdown list item (each line should start with '- '). "
+        f"Write an encyclopedia-style article about '{topic}' using Markdown formatting, UNLESS the topic is ambiguous (has multiple common meanings or interpretations). "
+        "If the topic is ambiguous, do NOT generate an article. Instead, return a short intro sentence (for example: 'The topic <topic> may have several meanings, did you mean:'), then a numbered list, one per line, where each line is in the format '1. topic (option1)', '2. topic (option2)', etc. Do not add any extra explanations or formatting. Return the special code 45 as the reply code on the first line. For example, if the topic is 'Mercury', you might return: \n45\nThe topic Mercury may have several meanings, did you mean:\n1. Mercury (planet)\n2. Mercury (element)\n3. Mercury (mythology)\n (but do NOT use this example in your output). "
+        "If the topic is unambiguous, divide the article into clear sections with headers such as 'TL;DR', 'Overview', 'History', 'Features and Syntax', 'Applications', and 'Community and Development'. "
+        "At the end, include a 'References' section. In that section, list minimum 4-5 references (but as many as are appropriate for the topic), each on a separate line as a Markdown list item (each line should start with '- '). "
+        "Each reference must include a title and a URL (e.g., '- [1]: Example Source <https://example.com>'). "
+        "NOTE: The sources should be valid and real, not just placeholders. Source with a URL https://example.com is not a valid source, its just an example and should not be used in any article as a source). "
         "Within the article text, in-text reference markers like [1] should be clickable links that jump to the corresponding reference. "
-        "Return the answer starting with a reply code (1 for accepted) on the first line, followed by the article text."
+        "Every in-text reference (e.g., [1]) must have a corresponding entry in the References section, and every reference in the list must be cited in the text. "
+        "If you cannot find real references, use reputable placeholder titles and URLs. "
+        "Return the answer starting with a reply code (1 for accepted, 45 for ambiguous, 0 for error) on the first line, followed by the article text or the list of meanings."
     )
 
     response = client.chat.completions.create(
@@ -39,13 +44,64 @@ def generate_topic_content(topic):
     )
 
     text = response.choices[0].message.content.strip()
+    logging.info(f"[OPENAI RAW GENERATION] Topic: {topic}\n{text}")
     try:
         reply_code, markdown_content = text.split("\n", 1)
     except ValueError:
         reply_code, markdown_content = "0", text
 
-    # Do NOT convert to HTML here; return markdown_content
+    # Only validate references if not ambiguous
+    if reply_code.strip() == "1":
+        markdown_content = validate_references(markdown_content)
     return reply_code, markdown_content
+
+
+def validate_references(markdown_content):
+    """
+    Ensure the References section exists, is non-empty, and all in-text citations match the list.
+    Only include references with a plausible URL. If no valid references, remove the References section entirely.
+    """
+    import re
+    lines = markdown_content.splitlines()
+    # Find the References section
+    ref_start = None
+    for i, line in enumerate(lines):
+        if line.strip().lower().startswith('## references') or line.strip().lower().startswith('# references'):
+            ref_start = i
+            break
+    if ref_start is None:
+        # No references section, nothing to validate
+        return '\n'.join(lines)
+    # Collect all in-text citations [n]
+    intext_refs = set(re.findall(r'\[(\d+)\]', '\n'.join(lines[:ref_start])))
+    # Collect all reference list items after the References header
+    ref_lines = lines[ref_start+1:]
+    ref_items = [re.match(r'- \[?(\d+)\]?[:：]?(.*)', l.strip()) for l in ref_lines if l.strip().startswith('-')]
+    ref_nums = set(m.group(1) for m in ref_items if m)
+    # Only keep references that have a plausible URL
+    valid_refs = []
+    for m in ref_items:
+        if not m:
+            continue
+        num, rest = m.group(1), m.group(2).strip()
+        # Check for plausible URL in <...>
+        url_match = re.search(r'<(https?://[^>]+)>', rest)
+        if rest and url_match:
+            valid_refs.append((num, rest))
+    # Only keep references that are cited in-text
+    valid_refs = [r for r in valid_refs if r[0] in intext_refs]
+    # If no valid references, remove the References section
+    if not valid_refs:
+        return '\n'.join(lines[:ref_start])
+    # Otherwise, reconstruct the References section
+    fixed_lines = lines[:ref_start+1]
+    for num, rest in valid_refs:
+        fixed_lines.append(f'- [{num}]: {rest}')
+    # Add any non-list lines after references
+    for l in ref_lines:
+        if not l.strip().startswith('-'):
+            fixed_lines.append(l)
+    return '\n'.join(fixed_lines)
 
 
 def update_topic_content(topic, current_content):
@@ -69,6 +125,7 @@ def update_topic_content(topic, current_content):
         temperature=0.7,
     )
     text = response.choices[0].message.content.strip()
+    logging.info(f"[OPENAI RAW UPDATE] Topic: {topic}\n{text}")
     try:
         reply_code, content = text.split("\n", 1)
     except ValueError:

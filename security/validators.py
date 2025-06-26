@@ -9,8 +9,8 @@ from datetime import datetime
 from werkzeug.exceptions import BadRequest
 import bleach
 
-# Topic slug validation regex
-TOPIC_SLUG_REGEX = re.compile(r'^[a-zA-Z0-9_\-\s]{1,50}$')
+# Allow most printable, non-control ASCII symbols except backslash and grave accent
+TOPIC_SLUG_REGEX = re.compile(r'^[a-zA-Z0-9_\-\s\+#\(\)\.,:;!\?/\[\]\{\}\'\"&\*%\$@\^=~\|<>]{1,100}$')
 
 # Configure allowed HTML tags and attributes
 ALLOWED_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'blockquote', 'code']

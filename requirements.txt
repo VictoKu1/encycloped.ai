@@ -6,9 +6,9 @@ redis
 bs4
 Flask-Limiter
 python-dotenv
+pymdown-extensions
 Werkzeug
 Flask-WTF
 flask_sqlalchemy 
 psycopg2-binary
 sqlalchemy
-

@@ -93,15 +93,27 @@ def topic_page(topic):
         html_content = None
         last_update = now_str
         topic_suggestions = []
+        ambiguous_meanings = None
+        ambiguous = False
 
         if not topic_data:
             logging.info(f"[DEBUG] Will call OpenAI: topic_data is None (topic not in DB)")
             reply_code, markdown_content = generate_topic_content(topic)
-            topic_suggestions = extract_topic_suggestions(markdown_content)
-            html_content = convert_markdown(linkify_topics(markdown_content, topic_suggestions))
-            save_topic_data(topic_key, html_content, markdown_content, topic_suggestions)
-            last_update = now_str
-            topic_data = get_topic_data(topic_key)
+            if reply_code.strip() == "45":
+                ambiguous = True
+                raw = markdown_content.strip()
+                lines = [line.strip() for line in raw.splitlines() if line.strip()]
+                intro = lines[0] if lines else f"The topic {topic.title()} may have several meanings, did you mean:"
+                options = [l for l in lines[1:] if l and l[0].isdigit() and '.' in l]
+                # Remove numbering and extra spaces
+                ambiguous_meanings = [l.split('.', 1)[1].strip() if '.' in l else l for l in options]
+                return render_template("topic.html", topic=topic.title(), content=None, last_update=now_str, ambiguous=True, ambiguous_intro=intro, ambiguous_meanings=ambiguous_meanings)
+            else:
+                topic_suggestions = extract_topic_suggestions(markdown_content)
+                html_content = convert_markdown(linkify_topics(markdown_content, topic_suggestions))
+                save_topic_data(topic_key, html_content, markdown_content, topic_suggestions)
+                last_update = now_str
+                topic_data = get_topic_data(topic_key)
         elif is_outdated:
             logging.info(f"[DEBUG] Will call OpenAI: topic is outdated")
             current_content = topic_data["content"]
@@ -114,6 +126,24 @@ def topic_page(topic):
                 save_topic_data(topic_key, html_content, markdown_content, topic_suggestions)
                 last_update = now_str
                 topic_data = get_topic_data(topic_key)
+            elif reply_code.strip() == "45":
+                ambiguous = True
+                raw = updated_content.strip()
+                if '\n' in raw:
+                    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+                else:
+                    parts = raw.split(') ')
+                    lines = []
+                    for part in parts:
+                        if part:
+                            if not part.endswith(')'):
+                                part = part + ')'
+                            lines.append(part.strip())
+                ambiguous_meanings = [l for l in lines if l and l != '45']
+                html_content = "<ul>" + "".join([f'<li><a href="/{m.replace(" ", "%20")}">{m}</a></li>' for m in ambiguous_meanings]) + "</ul>"
+                save_topic_data(topic_key, html_content, updated_content, [])
+                last_update = now_str
+                topic_data = get_topic_data(topic_key)
         else:
             logging.info(f"[DEBUG] Will NOT call OpenAI: topic is present and not outdated")
             last_update = topic_data.get("generated_at", now_str)
@@ -122,6 +152,27 @@ def topic_page(topic):
         # Use only the data from the database for rendering
         content = topic_data["content"]
         markdown_content = topic_data.get("markdown", None)
+        ambiguous = False
+        ambiguous_meanings = None
+        if markdown_content and markdown_content.strip() and markdown_content.strip().split("\n", 1)[0].strip() == "45":
+            ambiguous = True
+            raw = markdown_content.strip()
+            if '\n' in raw:
+                lines = [line.strip() for line in raw.splitlines()[1:] if line.strip()]
+            else:
+                parts = raw.split(') ')
+                lines = []
+                for part in parts:
+                    if part:
+                        if not part.endswith(')'):
+                            part = part + ')'
+                        lines.append(part.strip())
+            ambiguous_meanings = [l for l in lines if l and l != '45']
+
+        if ambiguous:
+            intro = ambiguous_intro if 'ambiguous_intro' in locals() else f"The topic {topic.title()} may have several meanings, did you mean:"
+            return render_template("topic.html", topic=topic.title(), content=None, last_update=last_update, ambiguous=True, ambiguous_intro=intro, ambiguous_meanings=ambiguous_meanings)
+
         if not markdown_content:
             # If markdown is missing, show an error message
             html_content_final = '<p><em>Error: Article markdown missing. Please regenerate the article.</em></p>'

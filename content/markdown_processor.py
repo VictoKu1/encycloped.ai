@@ -5,6 +5,7 @@ Handles markdown to HTML conversion and content processing.
 
 import re
 import markdown
+import pymdownx.arithmatex
 from security.validators import sanitize_html
 
 
@@ -31,13 +32,38 @@ def add_reference_ids(html):
     return html
 
 
+def preprocess_math_blocks(content):
+    """
+    Convert [ ... ] blocks that look like LaTeX math to $$ ... $$ for MathJax rendering.
+    Only replaces blocks that contain LaTeX commands (e.g., \begin, \sum, _{, ^{, etc.).
+    """
+    import re
+    # Replace [ ... ] with $$ ... $$ if it looks like LaTeX math
+    def replacer(match):
+        inner = match.group(1)
+        # Heuristic: if it contains LaTeX commands, treat as math
+        if re.search(r'\\(begin|end|sum|frac|cdot|vdots|mathbb|[a-zA-Z]+_\{|[a-zA-Z]+\^\{)', inner):
+            return f'$$\n{inner}\n$$'
+        return match.group(0)
+    # Only replace if [ ... ] is on its own line or surrounded by whitespace
+    return re.sub(r'\[\s*([^\]]+?)\s*\]', replacer, content)
+
+
 def convert_markdown(content):
     """
     Convert Markdown text to HTML using the 'extra' and 'toc' extensions.
     Then post-process the HTML to linkify reference markers and add IDs to reference list items.
     Finally, sanitize the HTML to prevent XSS attacks.
     """
-    html = markdown.markdown(content, extensions=["extra", "toc"])
+    # Preprocess math blocks
+    content = preprocess_math_blocks(content)
+    html = markdown.markdown(
+        content,
+        extensions=["extra", "toc", "pymdownx.arithmatex"],
+        extension_configs={
+            "pymdownx.arithmatex": {"generic": True}
+        }
+    )
     html = linkify_references(html)
     html = add_reference_ids(html)
     html = sanitize_html(html)  # Sanitize HTML before returning

@@ -33,10 +33,21 @@
         <h1>{{ topic }}</h1>
       </header>
       <div id="article-content">
-        {{ content|safe }}
-        <div style="margin-top:10px;text-align:left;">
-          <p style="font-size:0.95em;color:#888;margin-bottom:4px;">Last updated: {{ last_update|replace('T', ' ') }}</p>
-        </div>
+        {% if ambiguous %}
+          <div class="ambiguous-list">
+            <p>{{ ambiguous_intro }}</p>
+            <ul>
+              {% for meaning in ambiguous_meanings %}
+                <li><a href="/{{ meaning|replace(' ', '%20') }}">{{ meaning }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% else %}
+          {{ content|safe }}
+          <div style="margin-top:10px;text-align:left;">
+            <p style="font-size:0.95em;color:#888;margin-bottom:4px;">Last updated: {{ last_update|replace('T', ' ') }}</p>
+          </div>
+        {% endif %}
       </div>
       <!-- Other elements like modals go here -->
 
