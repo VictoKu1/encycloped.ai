@@ -1,14 +1,59 @@
 """
 Topic Generation Agent
 Handles LLM interactions for generating and updating encyclopedia articles.
+Supports both OpenAI API and local LLM via Ollama.
 """
 
 import os
 from openai import OpenAI
 import logging
+from typing import Optional
+
+# Import local LLM functionality
+from .local_llm import get_local_llm_client, get_local_llm_model
+
+# Global flag to determine which LLM to use
+USE_LOCAL_LLM = False
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+
+def set_llm_mode(use_local: bool):
+    """Set whether to use local LLM or OpenAI API."""
+    global USE_LOCAL_LLM
+    USE_LOCAL_LLM = use_local
+    if use_local:
+        logging.info("Using local LLM mode")
+    else:
+        logging.info("Using OpenAI API mode")
+
+
+def _call_llm(messages: list, max_tokens: int = 800, temperature: float = 0.7) -> Optional[str]:
+    """Unified interface to call either OpenAI or local LLM."""
+    global USE_LOCAL_LLM
+    
+    if USE_LOCAL_LLM:
+        client = get_local_llm_client()
+        if client is None:
+            logging.error("Local LLM client not available")
+            return None
+        
+        model = get_local_llm_model()
+        return client.generate(model, messages, max_tokens, temperature)
+    else:
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4.1",
+                store=True,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logging.error(f"OpenAI API error: {e}")
+            return None
 
 
 def generate_topic_content(topic):
@@ -29,21 +74,16 @@ def generate_topic_content(topic):
         "Return the answer starting with a reply code (1 for accepted, 45 for ambiguous, 0 for error) on the first line, followed by the article text or the list of meanings."
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        store=True,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a knowledgeable encyclopedia writer.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=800,
-        temperature=0.7,
-    )
-
-    text = response.choices[0].message.content.strip()
+    text = _call_llm([
+        {
+            "role": "system",
+            "content": "You are a knowledgeable encyclopedia writer.",
+        },
+        {"role": "user", "content": prompt},
+    ])
+    
+    if text is None:
+        return "0", "Error: Unable to generate content"
     logging.info(f"[OPENAI RAW GENERATION] Topic: {topic}\n{text}")
     try:
         reply_code, markdown_content = text.split("\n", 1)
@@ -114,17 +154,13 @@ def update_topic_content(topic, current_content):
         "If the article is already up to date, return it unchanged. Return your response starting with a reply code (1 for updated, 0 for unchanged) on the first line, followed by the article text.\n\n"
         f"{current_content}"
     )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        store=True,
-        messages=[
-            {"role": "system", "content": "You are a knowledgeable encyclopedia updater."},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=800,
-        temperature=0.7,
-    )
-    text = response.choices[0].message.content.strip()
+    text = _call_llm([
+        {"role": "system", "content": "You are a knowledgeable encyclopedia updater."},
+        {"role": "user", "content": prompt},
+    ])
+    
+    if text is None:
+        return "0", current_content
     logging.info(f"[OPENAI RAW UPDATE] Topic: {topic}\n{text}")
     try:
         reply_code, content = text.split("\n", 1)
@@ -144,19 +180,16 @@ def extract_topic_suggestions(article_text):
         "Do not include the main topic itself.\n\n"
         f"{article_text}"
     )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        store=True,
-        messages=[
-            {"role": "system", "content": "You are an assistant that extracts topic suggestions from encyclopedia articles."},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=300,
-        temperature=0.3,
-    )
+    text = _call_llm([
+        {"role": "system", "content": "You are an assistant that extracts topic suggestions from encyclopedia articles."},
+        {"role": "user", "content": prompt},
+    ], max_tokens=300, temperature=0.3)
+    
+    if text is None:
+        return []
+    
     # Try to safely evaluate the list from the LLM response
     import ast
-    text = response.choices[0].message.content.strip()
     try:
         suggestions = ast.literal_eval(text)
         if not isinstance(suggestions, list):
@@ -191,21 +224,16 @@ def process_user_feedback(topic, current_content, feedback_type, feedback_detail
     else:
         return "0", current_content
 
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        store=True,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful assistant for editing encyclopedia articles.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=800,
-        temperature=0.7,
-    )
-
-    text = response.choices[0].message.content.strip()
+    text = _call_llm([
+        {
+            "role": "system",
+            "content": "You are a helpful assistant for editing encyclopedia articles.",
+        },
+        {"role": "user", "content": prompt},
+    ])
+    
+    if text is None:
+        return "0", current_content
     try:
         reply_code, updated_content = text.split("\n", 1)
     except ValueError:

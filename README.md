@@ -24,6 +24,12 @@
 - **Persistent Database Storage:**  
   All articles and topics are stored in a PostgreSQL database for durability and reliability. This enables multi-user access, prevents data loss on server restarts, and supports future scalability.
 
+- **Flexible Topic Names:**
+  Topic names now support most common symbols, including spaces, parentheses, periods, commas, colons, semicolons, exclamation marks, question marks, slashes, brackets, braces, quotes, ampersands, asterisks, percent, dollar, at, caret, equals, tilde, pipe, angle brackets, and more. This allows for accurate representation of real-world article titles and disambiguation (e.g., "Python (programming language)", "C++", "Mercury (planet)", etc.).
+
+- **Local LLM Support:**
+  Run the application with local LLMs using Ollama. Switch between OpenAI API and local models by using different startup commands. Supports any model available in Ollama, with DeepSeek-R1 as the default local option.
+
 ## Security Features
 
 - **Cross-Site Scripting (XSS) Protection:**
@@ -50,7 +56,7 @@
 
 
 - **Flask App**: Handles all web requests, user feedback, and article generation.
-- **OpenAI API**: Used for generating and updating encyclopedia articles and topic suggestions.
+- **LLM Integration**: Supports both OpenAI API and local LLMs via Ollama for generating and updating encyclopedia articles and topic suggestions.
 - **PostgreSQL**: Stores all articles, markdown, topic suggestions, and logs—**persistent, durable storage**.
 - **Redis**: Used **only for rate limiting** (not for article data)—ensures fair usage and protects against abuse, even in a distributed/multi-instance setup.
 
@@ -151,11 +157,58 @@ python utils/db.py --init
 This creates the necessary tables for topics and logs. You only need to run this once (or after making schema changes).
 
 ### 4. Run the Flask App
+
+#### Option A: Using OpenAI API (Default)
 In a new terminal (so you can keep it open while using the app):
 ```bash
 python app.py
 ```
 Leave this terminal open while you use the app in your browser.
+
+#### Option B: Using Local LLM with Ollama
+If you want to use a local LLM instead of OpenAI API:
+
+1. **Install Ollama:**
+   Visit [ollama.ai](https://ollama.ai) and follow the installation instructions for your platform.
+
+2. **Start Ollama:**
+   ```bash
+   ollama serve
+   ```
+
+3. **Pull a model (e.g., DeepSeek-R1):**
+   ```bash
+   ollama pull deepseek-coder:6.7b
+   ```
+
+4. **Configure local LLM settings:**
+   
+   **Option A: Interactive setup (Recommended):**
+   ```bash
+   python setup_local_llm.py
+   ```
+   
+   **Option B: Manual configuration:**
+   Edit the `local_llm.json` file to specify your preferred model:
+   ```json
+   {
+       "model": "deepseek-coder:6.7b",
+       "base_url": "http://localhost:11434"
+   }
+   ```
+
+5. **Run the app in local LLM mode:**
+   ```bash
+   python app.py local
+   ```
+
+   The app will validate your Ollama setup and model availability before starting.
+
+6. **Test the local LLM integration (Optional):**
+   ```bash
+   python test_local_llm.py
+   ```
+   This will run a series of tests to verify that the local LLM integration is working correctly.
 
 ---
 
@@ -180,13 +233,41 @@ docker-compose up -d
 ## Usage
 
 - **Home Page:**  
-  Enter a topic in the search bar. If the topic already exists, you'll be directed to its page; otherwise, a new page is generated with a loading animation while content is created.
+  Enter a topic in the search bar. Topic names can include most common symbols and punctuation, allowing for precise and disambiguated article titles (e.g., "Python (programming language)", "C++," "Mercury: The Planet"). If the topic already exists, you'll be directed to its page; otherwise, a new page is generated with a loading animation while content is created.
 
 - **Topic Pages:**  
   View the generated article along with citations. Use the "Report an Issue" button to flag inaccuracies or the "Add Missing Information" button to contribute extra details or subtopics.
 
 - **User Feedback:**  
-  Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the ChatGPT 4.1 (or any other LLM with an API) API before updating the article content.
+  Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the LLM (OpenAI API or local LLM) before updating the article content.
+
+- **LLM Mode Switching:**  
+  Easily switch between OpenAI API and local LLM modes by using different startup commands. The application validates your setup before starting to ensure everything works correctly.
+
+## Troubleshooting Local LLM
+
+### Common Issues
+
+1. **"Ollama is not running or not accessible"**
+   - Make sure Ollama is installed and running: `ollama serve`
+   - Check if Ollama is accessible at `http://localhost:11434`
+
+2. **"Model is not available in Ollama"**
+   - Pull the model first: `ollama pull <model_name>`
+   - Check available models: `ollama list`
+   - Update the model name in `local_llm.json` if needed
+
+3. **"Local LLM setup validation failed"**
+   - Run the test script: `python test_local_llm.py`
+   - Use the setup script to reconfigure: `python setup_local_llm.py`
+   - Check the logs for specific error messages
+   - Ensure your model has enough memory and resources
+
+### Performance Tips
+
+- Local LLMs may be slower than OpenAI API
+- Consider using smaller models for faster responses
+- Ensure your system has sufficient RAM for the chosen model
 
 ## Security Considerations
 

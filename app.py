@@ -4,6 +4,7 @@ AI Moderated Encyclopedia - Main application entry point.
 """
 
 import os
+import sys
 import logging
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify
@@ -17,7 +18,8 @@ from agents.topic_generator import (
     generate_topic_content, 
     update_topic_content, 
     extract_topic_suggestions,
-    process_user_feedback
+    process_user_feedback,
+    set_llm_mode
 )
 from security.validators import (
     validate_topic_slug, 
@@ -322,4 +324,30 @@ def add_information():
 
 
 if __name__ == "__main__":
+    # Check command line arguments
+    use_local_llm = len(sys.argv) > 1 and sys.argv[1] == "local"
+    
+    if use_local_llm:
+        print("🔧 Starting in local LLM mode...")
+        # Import local LLM validation
+        from agents.local_llm import validate_local_llm_setup
+        
+        # Validate local LLM setup
+        if not validate_local_llm_setup():
+            print("❌ Local LLM setup validation failed. Exiting.")
+            sys.exit(1)
+        
+        # Set the LLM mode to local
+        set_llm_mode(True)
+        print("✅ Local LLM mode activated")
+    else:
+        print("🌐 Starting in OpenAI API mode...")
+        # Check if OpenAI API key is available
+        if not os.environ.get("OPENAI_API_KEY"):
+            print("⚠️  Warning: OPENAI_API_KEY environment variable not set.")
+            print("   The application may not work properly without a valid API key.")
+        set_llm_mode(False)
+        print("✅ OpenAI API mode activated")
+    
+    print("🚀 Starting Flask application...")
     app.run(debug=True)

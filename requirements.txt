@@ -12,3 +12,4 @@ Flask-WTF
 flask_sqlalchemy 
 psycopg2-binary
 sqlalchemy
+requests
