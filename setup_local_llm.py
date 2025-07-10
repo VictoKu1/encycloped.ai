@@ -12,11 +12,13 @@ def setup_local_llm():
     print("🔧 Local LLM Setup")
     print("=" * 30)
     
-    # Default configuration
-    config = {
-        "model": "deepseek-coder:6.7b",
-        "base_url": "http://localhost:11434"
-    }
+    # Read configuration from local_llm.json
+    try:
+        with open("local_llm.json", "r") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"❌ Error reading local_llm.json: {e}")
+        config = {}
     
     print("\nThis script will help you configure your local LLM settings.")
     print("Press Enter to use the default values, or type your preferred values.")

@@ -1,4 +1,4 @@
 {
-    "model": "deepseek-r1:671b",
+    "model": "deepseek-r1:1.5b",
     "base_url": "http://localhost:11434"
-} 
+}
