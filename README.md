@@ -28,7 +28,7 @@
   Topic names now support most common symbols, including spaces, parentheses, periods, commas, colons, semicolons, exclamation marks, question marks, slashes, brackets, braces, quotes, ampersands, asterisks, percent, dollar, at, caret, equals, tilde, pipe, angle brackets, and more. This allows for accurate representation of real-world article titles and disambiguation (e.g., "Python (programming language)", "C++", "Mercury (planet)", etc.).
 
 - **Local LLM Support:**
-  Run the application with local LLMs using Ollama. Switch between OpenAI API and local models by using different startup commands. Supports any model available in Ollama, with DeepSeek-R1 as the default local option.
+  Run the application with local LLMs using Ollama. Switch between OpenAI API and local models by using different startup commands. Supports any model available in Ollama, with DeepSeek-Coder as the recommended local option. Local LLM mode uses optimized prompts for better performance and includes improved error handling and timeout management.
 
 ## Security Features
 
@@ -56,7 +56,7 @@
 
 
 - **Flask App**: Handles all web requests, user feedback, and article generation.
-- **LLM Integration**: Supports both OpenAI API and local LLMs via Ollama for generating and updating encyclopedia articles and topic suggestions.
+- **LLM Integration**: Supports both OpenAI API and local LLMs via Ollama for generating and updating encyclopedia articles and topic suggestions. Local LLM mode includes optimized prompts, increased timeouts, and improved error handling for better reliability.
 - **PostgreSQL**: Stores all articles, markdown, topic suggestions, and logs—**persistent, durable storage**.
 - **Redis**: Used **only for rate limiting** (not for article data)—ensures fair usage and protects against abuse, even in a distributed/multi-instance setup.
 
@@ -175,11 +175,13 @@ If you want to use a local LLM instead of OpenAI API:
    ```bash
    ollama serve
    ```
+   **Note:** If you get an error about the port being in use, it means Ollama is already running. This is normal and you can proceed to the next step.
 
-3. **Pull a model (e.g., DeepSeek-R1):**
+3. **Pull a model:**
    ```bash
    ollama pull deepseek-coder:6.7b
    ```
+   This model is recommended for good performance and quality. You can also try other models like `llama3.2:3b` for faster responses.
 
 4. **Configure local LLM settings:**
    
@@ -197,18 +199,18 @@ If you want to use a local LLM instead of OpenAI API:
    }
    ```
 
-5. **Run the app in local LLM mode:**
-   ```bash
-   python app.py local
-   ```
-
-   The app will validate your Ollama setup and model availability before starting.
-
-6. **Test the local LLM integration (Optional):**
+5. **Test the local LLM integration (Recommended):**
    ```bash
    python test_local_llm.py
    ```
    This will run a series of tests to verify that the local LLM integration is working correctly.
+
+6. **Run the app in local LLM mode:**
+   ```bash
+   python app.py local
+   ```
+
+   The app will validate your Ollama setup and model availability before starting. Local LLM mode uses simplified prompts optimized for local models, providing faster responses while maintaining quality.
 
 ---
 
@@ -242,7 +244,7 @@ docker-compose up -d
   Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the LLM (OpenAI API or local LLM) before updating the article content.
 
 - **LLM Mode Switching:**  
-  Easily switch between OpenAI API and local LLM modes by using different startup commands. The application validates your setup before starting to ensure everything works correctly.
+  Easily switch between OpenAI API and local LLM modes by using different startup commands. The application validates your setup before starting to ensure everything works correctly. Local LLM mode provides offline capability and privacy while maintaining article quality.
 
 ## Troubleshooting Local LLM
 
@@ -251,9 +253,10 @@ docker-compose up -d
 1. **"Ollama is not running or not accessible"**
    - Make sure Ollama is installed and running: `ollama serve`
    - Check if Ollama is accessible at `http://localhost:11434`
+   - If you get a port binding error, Ollama is already running (this is normal)
 
 2. **"Model is not available in Ollama"**
-   - Pull the model first: `ollama pull <model_name>`
+   - Pull the model first: `ollama pull deepseek-coder:6.7b`
    - Check available models: `ollama list`
    - Update the model name in `local_llm.json` if needed
 
@@ -263,11 +266,26 @@ docker-compose up -d
    - Check the logs for specific error messages
    - Ensure your model has enough memory and resources
 
+4. **"Error communicating with Ollama: Read timed out"**
+   - Local LLMs are slower than OpenAI API
+   - The timeout has been increased to 120 seconds
+   - Consider using a smaller model for faster responses
+   - Ensure your system has sufficient RAM (at least 8GB recommended)
+
+5. **"OpenAI API error: local variable 'client' referenced before assignment"**
+   - This error occurs when the OpenAI API key is not set but the app tries to use OpenAI mode
+   - Set your OpenAI API key: `$env:OPENAI_API_KEY="your_key"`
+   - Or use local LLM mode: `python app.py local`
+
 ### Performance Tips
 
-- Local LLMs may be slower than OpenAI API
-- Consider using smaller models for faster responses
-- Ensure your system has sufficient RAM for the chosen model
+- Local LLMs may be slower than OpenAI API (30-60 seconds for article generation)
+- Consider using smaller models for faster responses:
+  - `llama3.2:3b` - Faster, smaller model
+  - `deepseek-coder:6.7b` - Good balance of speed and quality
+  - `deepseek-coder:33b` - Higher quality, slower
+- Ensure your system has sufficient RAM (8GB minimum, 16GB recommended)
+- Local LLM mode uses optimized prompts for better performance
 
 ## Security Considerations
 

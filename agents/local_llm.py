@@ -57,7 +57,7 @@ class OllamaClient:
             response = self.session.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=60
+                timeout=120  # Increased timeout for local LLMs
             )
             
             if response.status_code == 200:

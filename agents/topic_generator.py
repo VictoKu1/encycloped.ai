@@ -15,8 +15,8 @@ from .local_llm import get_local_llm_client, get_local_llm_model
 # Global flag to determine which LLM to use
 USE_LOCAL_LLM = False
 
-# Initialize the OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Initialize the OpenAI client lazily
+client = None
 
 
 def set_llm_mode(use_local: bool):
@@ -31,7 +31,7 @@ def set_llm_mode(use_local: bool):
 
 def _call_llm(messages: list, max_tokens: int = 800, temperature: float = 0.7) -> Optional[str]:
     """Unified interface to call either OpenAI or local LLM."""
-    global USE_LOCAL_LLM
+    global USE_LOCAL_LLM, client
     
     if USE_LOCAL_LLM:
         local_client = get_local_llm_client()
@@ -42,6 +42,10 @@ def _call_llm(messages: list, max_tokens: int = 800, temperature: float = 0.7) -
         model = get_local_llm_model()
         return local_client.generate(model, messages, max_tokens, temperature)
     else:
+        # Initialize OpenAI client lazily
+        if client is None:
+            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        
         try:
             response = client.chat.completions.create(
                 model="gpt-4.1",
@@ -61,18 +65,30 @@ def generate_topic_content(topic):
     Call the OpenAI Chat API to generate an encyclopedia-style article with Markdown formatting.
     If the topic is ambiguous (has multiple common meanings), do NOT generate an article. Instead, return a short intro sentence (e.g., 'The topic <topic> may have several meanings, did you mean:'), then a numbered list (one per line, e.g., '1. topic (option1)'), and return the special code 45 as the reply code. If the topic is unambiguous, generate the article as before.
     """
-    prompt = (
-        f"Write an encyclopedia-style article about '{topic}' using Markdown formatting, UNLESS the topic is ambiguous (has multiple common meanings or interpretations). "
-        "If the topic is ambiguous, do NOT generate an article. Instead, return a short intro sentence (for example: 'The topic <topic> may have several meanings, did you mean:'), then a numbered list, one per line, where each line is in the format '1. topic (option1)', '2. topic (option2)', etc. Do not add any extra explanations or formatting. Return the special code 45 as the reply code on the first line. For example, if the topic is 'Mercury', you might return: \n45\nThe topic Mercury may have several meanings, did you mean:\n1. Mercury (planet)\n2. Mercury (element)\n3. Mercury (mythology)\n (but do NOT use this example in your output). "
-        "If the topic is unambiguous, divide the article into clear sections with headers such as 'TL;DR', 'Overview', 'History', 'Features and Syntax', 'Applications', and 'Community and Development'. "
-        "At the end, include a 'References' section. In that section, list minimum 4-5 references (but as many as are appropriate for the topic), each on a separate line as a Markdown list item (each line should start with '- '). "
-        "Each reference must include a title and a URL (e.g., '- [1]: Example Source <https://example.com>'). "
-        "NOTE: The sources should be valid and real, not just placeholders. Source with a URL https://example.com is not a valid source, its just an example and should not be used in any article as a source). "
-        "Within the article text, in-text reference markers like [1] should be clickable links that jump to the corresponding reference. "
-        "Every in-text reference (e.g., [1]) must have a corresponding entry in the References section, and every reference in the list must be cited in the text. "
-        "If you cannot find real references, use reputable placeholder titles and URLs. "
-        "Return the answer starting with a reply code (1 for accepted, 45 for ambiguous, 0 for error) on the first line, followed by the article text or the list of meanings."
-    )
+    global USE_LOCAL_LLM
+    
+    if USE_LOCAL_LLM:
+        # Simplified prompt for local LLMs to avoid timeouts
+        prompt = (
+            f"Write a short encyclopedia article about '{topic}' in Markdown format. "
+            "Include sections: Overview, History, Applications. "
+            "Add a References section with 3-4 sources. "
+            "Start with reply code 1 on first line, then the article."
+        )
+    else:
+        # Full prompt for OpenAI API
+        prompt = (
+            f"Write an encyclopedia-style article about '{topic}' using Markdown formatting, UNLESS the topic is ambiguous (has multiple common meanings or interpretations). "
+            "If the topic is ambiguous, do NOT generate an article. Instead, return a short intro sentence (for example: 'The topic <topic> may have several meanings, did you mean:'), then a numbered list, one per line, where each line is in the format '1. topic (option1)', '2. topic (option2)', etc. Do not add any extra explanations or formatting. Return the special code 45 as the reply code on the first line. For example, if the topic is 'Mercury', you might return: \n45\nThe topic Mercury may have several meanings, did you mean:\n1. Mercury (planet)\n2. Mercury (element)\n3. Mercury (mythology)\n (but do NOT use this example in your output). "
+            "If the topic is unambiguous, divide the article into clear sections with headers such as 'TL;DR', 'Overview', 'History', 'Features and Syntax', 'Applications', and 'Community and Development'. "
+            "At the end, include a 'References' section. In that section, list minimum 4-5 references (but as many as are appropriate for the topic), each on a separate line as a Markdown list item (each line should start with '- '). "
+            "Each reference must include a title and a URL (e.g., '- [1]: Example Source <https://example.com>'). "
+            "NOTE: The sources should be valid and real, not just placeholders. Source with a URL https://example.com is not a valid source, its just an example and should not be used in any article as a source). "
+            "Within the article text, in-text reference markers like [1] should be clickable links that jump to the corresponding reference. "
+            "Every in-text reference (e.g., [1]) must have a corresponding entry in the References section, and every reference in the list must be cited in the text. "
+            "If you cannot find real references, use reputable placeholder titles and URLs. "
+            "Return the answer starting with a reply code (1 for accepted, 45 for ambiguous, 0 for error) on the first line, followed by the article text or the list of meanings."
+        )
 
     text = _call_llm([
         {
@@ -90,8 +106,15 @@ def generate_topic_content(topic):
     except ValueError:
         reply_code, markdown_content = "0", text
 
+    # Clean up reply code (handle variations like "Reply Code: 1")
+    reply_code = reply_code.strip()
+    if reply_code.lower().startswith("reply code:"):
+        reply_code = reply_code.split(":", 1)[1].strip()
+    elif reply_code.lower().startswith("reply code"):
+        reply_code = reply_code.split(" ", 2)[2].strip()
+
     # Only validate references if not ambiguous
-    if reply_code.strip() == "1":
+    if reply_code == "1":
         markdown_content = validate_references(markdown_content)
     return reply_code, markdown_content
 
