@@ -34,13 +34,13 @@ def _call_llm(messages: list, max_tokens: int = 800, temperature: float = 0.7) -
     global USE_LOCAL_LLM
     
     if USE_LOCAL_LLM:
-        client = get_local_llm_client()
-        if client is None:
+        local_client = get_local_llm_client()
+        if local_client is None:
             logging.error("Local LLM client not available")
             return None
         
         model = get_local_llm_model()
-        return client.generate(model, messages, max_tokens, temperature)
+        return local_client.generate(model, messages, max_tokens, temperature)
     else:
         try:
             response = client.chat.completions.create(
