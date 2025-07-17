@@ -19,7 +19,8 @@ from agents.topic_generator import (
     update_topic_content, 
     extract_topic_suggestions,
     process_user_feedback,
-    set_llm_mode
+    set_llm_mode,
+    generate_topic_suggestions_from_text
 )
 from security.validators import (
     validate_topic_slug, 
@@ -320,6 +321,38 @@ def add_information():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logging.error(f"Error in add_information: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/suggest_topics", methods=["POST"])
+@limiter.limit("10 per minute")
+def suggest_topics():
+    """
+    Generate topic suggestions based on selected text.
+    Expected JSON payload:
+    {
+       "selected_text": "Python is a programming language...",
+       "current_topic": "Python"
+    }
+    """
+    try:
+        data = request.get_json()
+        validate_json_payload(data, ["selected_text"])
+        
+        selected_text = sanitize_text(data["selected_text"])
+        current_topic = data.get("current_topic", "")
+        
+        if len(selected_text.strip()) < 10:
+            return jsonify({"error": "Selected text is too short. Please select more text."}), 400
+        
+        # Generate topic suggestions using the LLM
+        suggestions = generate_topic_suggestions_from_text(selected_text, current_topic)
+        
+        return jsonify({"suggestions": suggestions})
+    except BadRequest as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error in suggest_topics: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 

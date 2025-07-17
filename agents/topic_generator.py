@@ -222,6 +222,42 @@ def extract_topic_suggestions(article_text):
     return suggestions
 
 
+def generate_topic_suggestions_from_text(selected_text, current_topic=""):
+    """
+    Generate topic suggestions based on selected text from an article.
+    Returns a list of 3 relevant topic suggestions.
+    """
+    prompt = (
+        f"Based on the following selected text from an encyclopedia article, generate exactly 3 relevant topic suggestions "
+        f"that would make good new encyclopedia articles. These should be topics that a reader might want to learn more about "
+        f"after reading this text.\n\n"
+        f"Selected text: {selected_text}\n\n"
+        f"Current article topic: {current_topic}\n\n"
+        f"Return only a Python list of exactly 3 strings, each being a concise topic name. "
+        f"Make sure the suggestions are relevant to the selected text and would be interesting to explore further. "
+        f"Return the list in this exact format: ['Topic 1', 'Topic 2', 'Topic 3']"
+    )
+    
+    text = _call_llm([
+        {"role": "system", "content": "You are an assistant that generates relevant topic suggestions for encyclopedia articles."},
+        {"role": "user", "content": prompt},
+    ], max_tokens=200, temperature=0.7)
+    
+    if text is None:
+        return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+    
+    # Try to safely evaluate the list from the LLM response
+    import ast
+    try:
+        suggestions = ast.literal_eval(text)
+        if isinstance(suggestions, list) and len(suggestions) >= 3:
+            return suggestions[:3]  # Return exactly 3 suggestions
+        else:
+            return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+    except Exception:
+        return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+
+
 def process_user_feedback(topic, current_content, feedback_type, feedback_details, sources):
     """
     Process user feedback (reports or additions) using the LLM.

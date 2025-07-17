@@ -78,7 +78,32 @@
         </div>
       </div>
 
+    </div> <!-- END .container -->
+
+    <!-- Topic Suggestion Modal (moved outside .container) -->
+    <div id="topic-suggestion-modal" class="topic-suggestion-modal">
+      <div class="topic-suggestion-content">
+        <div class="topic-suggestion-header">
+          <h2>Explore Related Topics</h2>
+          <button class="topic-suggestion-close" id="close-topic-suggestion">&times;</button>
+        </div>
+        <div class="selected-text-display">
+          <p><strong>Selected text:</strong> <span id="selected-text-display"></span></p>
+        </div>
+        <div class="suggestions-container">
+          <h3>Suggested Topics</h3>
+          <div id="suggestions-list">
+            <div class="suggestions-loading">Generating suggestions...</div>
+          </div>
+        </div>
+        <div class="custom-topic-section">
+          <h3>Or Enter Your Own Topic</h3>
+          <input type="text" id="custom-topic-input" class="custom-topic-input" placeholder="Enter a topic to explore...">
+          <button id="generate-custom-btn" class="generate-custom-btn">Generate Article</button>
+        </div>
+      </div>
     </div>
+
     <footer class="site-footer">
       <div class="copyright">
         <h6>
