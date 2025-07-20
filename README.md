@@ -30,6 +30,15 @@
 - **Local LLM Support:**
   Run the application with local LLMs using Ollama. Switch between OpenAI API and local models by using different startup commands. Supports any model available in Ollama, with DeepSeek-Coder as the recommended local option. Local LLM mode uses optimized prompts for better performance and includes improved error handling and timeout management.
 
+- **Interactive Topic Suggestion:**
+  Enhanced user engagement with intelligent text selection features. When you highlight text in an article, a lens icon (🔍) appears near your selection. Clicking the icon opens a modal that:
+  - Extracts actual terms from your selected text as topic suggestions
+  - Provides 3 relevant topic options based on the highlighted content
+  - Allows custom topic input with real-time validation
+  - Automatically converts selected text into clickable links to new articles
+  - Creates an interconnected encyclopedia where new topics link back to original content
+  - Features a blurred background modal with loading animations and accessibility support
+
 ## Security Features
 
 - **Cross-Site Scripting (XSS) Protection:**
@@ -177,7 +186,7 @@ If you want to use a local LLM instead of OpenAI API:
    ```
    **Note:** If you get an error about the port being in use, it means Ollama is already running. This is normal and you can proceed to the next step.
 
-3. **Pull a model:**
+3. **Pull a model (e.g., DeepSeek-R1):**
    ```bash
    ollama pull deepseek-coder:6.7b
    ```
@@ -240,11 +249,58 @@ docker-compose up -d
 - **Topic Pages:**  
   View the generated article along with citations. Use the "Report an Issue" button to flag inaccuracies or the "Add Missing Information" button to contribute extra details or subtopics.
 
+- **Interactive Topic Suggestion:**  
+  **New Feature!** Select any text in an article (at least 10 characters) and a lens icon (🔍) will appear near your selection. Click the icon to:
+  - See topic suggestions extracted from your selected text
+  - Enter a custom topic with real-time validation
+  - Generate new articles that automatically link back to the original content
+  - Create an interconnected web of related topics
+
 - **User Feedback:**  
   Feedback forms open in modals. Your input is sent via AJAX to the backend, where it is validated by the LLM (OpenAI API or local LLM) before updating the article content.
 
 - **LLM Mode Switching:**  
   Easily switch between OpenAI API and local LLM modes by using different startup commands. The application validates your setup before starting to ensure everything works correctly. Local LLM mode provides offline capability and privacy while maintaining article quality.
+
+## Interactive Topic Suggestion Feature
+
+The Interactive Topic Suggestion feature enhances article exploration by allowing users to discover and create related topics directly from the content they're reading.
+
+### How It Works
+
+1. **Text Selection**: Select any text in an article (minimum 10 characters)
+2. **Lens Icon**: A lens icon (🔍) appears near your selection
+3. **Topic Extraction**: Click the icon to extract actual terms from your selected text
+4. **Smart Suggestions**: The system provides 3 relevant topic suggestions based on the highlighted content
+5. **Custom Topics**: Enter your own topic with real-time validation
+6. **Automatic Linking**: Selected text becomes a clickable link to the new article
+7. **Interconnected Content**: Creates a web of related topics that link back to original content
+
+### Features
+
+- **Intelligent Extraction**: Extracts actual terms from selected text, not generic suggestions
+- **Real-time Validation**: Checks if custom topics are part of the selected text
+- **Visual Feedback**: Button color changes based on validation status
+- **Accessibility**: Keyboard navigation and screen reader support
+- **Mobile-Friendly**: Responsive design works on all devices
+- **Loading Animations**: Smooth loading states with progress indicators
+- **Blur Effects**: Modal with blurred background for focus
+
+### Example Workflow
+
+1. **Select text**: "Python is an interpreted programming language"
+2. **Click lens icon**: Opens modal with suggestions
+3. **See suggestions**: "Python", "interpreted", "programming language"
+4. **Click suggestion**: Creates new article and converts selected text to link
+5. **Result**: "Python is an <a href="/programming%20language">interpreted programming language</a>"
+
+### Benefits
+
+- **Discoverability**: Helps users find related topics they might not know about
+- **Content Creation**: Encourages creation of new articles from existing content
+- **Interconnection**: Creates a network of related articles
+- **User Engagement**: Makes article exploration more interactive and fun
+- **Knowledge Discovery**: Reveals connections between different topics
 
 ## Troubleshooting Local LLM
 

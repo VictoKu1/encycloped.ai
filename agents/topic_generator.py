@@ -225,37 +225,120 @@ def extract_topic_suggestions(article_text):
 def generate_topic_suggestions_from_text(selected_text, current_topic=""):
     """
     Generate topic suggestions based on selected text from an article.
-    Returns a list of 3 relevant topic suggestions.
+    Returns a list of 3 relevant topic suggestions extracted from the selected text.
     """
     prompt = (
-        f"Based on the following selected text from an encyclopedia article, generate exactly 3 relevant topic suggestions "
-        f"that would make good new encyclopedia articles. These should be topics that a reader might want to learn more about "
-        f"after reading this text.\n\n"
-        f"Selected text: {selected_text}\n\n"
+        f"EXTRACT ONLY terms that are ACTUALLY MENTIONED in the selected text below. "
+        f"Do NOT generate related concepts or interpretations. "
+        f"Look for specific words, phrases, or terms that appear in the text and could be encyclopedia topics.\n\n"
+        f"Selected text: '{selected_text}'\n\n"
         f"Current article topic: {current_topic}\n\n"
-        f"Return only a Python list of exactly 3 strings, each being a concise topic name. "
-        f"Make sure the suggestions are relevant to the selected text and would be interesting to explore further. "
-        f"Return the list in this exact format: ['Topic 1', 'Topic 2', 'Topic 3']"
+        f"CRITICAL RULES:\n"
+        f"1. ONLY extract terms that are EXPLICITLY mentioned in the selected text\n"
+        f"2. Do NOT generate related concepts, synonyms, or broader categories\n"
+        f"3. Do NOT interpret or expand on the text\n"
+        f"4. If the text says 'programming language', extract 'programming language' (not 'computer programming')\n"
+        f"5. If the text mentions specific names, extract those names\n"
+        f"6. If the text mentions specific concepts, extract those exact concepts\n"
+        f"7. If fewer than 3 terms are found, repeat some terms or use 'No additional terms found'\n\n"
+        f"Examples:\n"
+        f"- Text: 'Python is a programming language' → Extract: ['Python', 'programming language']\n"
+        f"- Text: 'machine learning algorithms' → Extract: ['machine learning', 'algorithms']\n"
+        f"- Text: 'web development frameworks' → Extract: ['web development', 'frameworks']\n"
+        f"- Text: 'programming language' → Extract: ['programming language'] (not 'computer programming')\n\n"
+        f"Return exactly 3 terms in this format: ['Term 1', 'Term 2', 'Term 3']"
     )
     
     text = _call_llm([
-        {"role": "system", "content": "You are an assistant that generates relevant topic suggestions for encyclopedia articles."},
+        {"role": "system", "content": "You are an assistant that extracts ONLY terms explicitly mentioned in text. Do NOT generate related concepts or interpretations."},
         {"role": "user", "content": prompt},
-    ], max_tokens=200, temperature=0.7)
+    ], max_tokens=200, temperature=0.1)
     
     if text is None:
-        return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+        return extract_terms_fallback(selected_text)
     
     # Try to safely evaluate the list from the LLM response
     import ast
     try:
         suggestions = ast.literal_eval(text)
         if isinstance(suggestions, list) and len(suggestions) >= 3:
-            return suggestions[:3]  # Return exactly 3 suggestions
+            # Validate that suggestions are actually from the text
+            validated_suggestions = validate_suggestions_against_text(suggestions, selected_text)
+            return validated_suggestions[:3]
         else:
-            return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+            return extract_terms_fallback(selected_text)
     except Exception:
-        return ["Topic suggestion unavailable", "Please try selecting different text", "Or enter your own topic"]
+        return extract_terms_fallback(selected_text)
+
+
+def extract_terms_fallback(selected_text):
+    """
+    Fallback method to extract terms from selected text using simple text analysis.
+    """
+    import re
+    
+    # Clean the text
+    text = selected_text.lower().strip()
+    
+    # Common programming/tech terms to look for
+    programming_terms = [
+        'programming', 'language', 'programming language', 'python', 'javascript', 'java', 'c++', 'c#', 'php',
+        'html', 'css', 'sql', 'database', 'algorithm', 'data structure', 'framework', 'library',
+        'api', 'web development', 'frontend', 'backend', 'full stack', 'mobile development',
+        'machine learning', 'artificial intelligence', 'ai', 'ml', 'deep learning', 'neural network',
+        'cloud computing', 'aws', 'azure', 'google cloud', 'docker', 'kubernetes', 'git',
+        'agile', 'scrum', 'devops', 'testing', 'unit test', 'integration test'
+    ]
+    
+    # Find terms that appear in the text
+    found_terms = []
+    for term in programming_terms:
+        if term in text:
+            found_terms.append(term)
+    
+    # If we found terms, return them
+    if found_terms:
+        # Ensure we have exactly 3 terms
+        while len(found_terms) < 3:
+            found_terms.append(found_terms[0] if found_terms else "programming")
+        return found_terms[:3]
+    
+    # If no programming terms found, extract noun phrases
+    words = re.findall(r'\b\w+\b', text)
+    if len(words) >= 3:
+        return words[:3]
+    elif len(words) > 0:
+        return words + [words[0]] * (3 - len(words))
+    else:
+        return ["No terms found", "Please try selecting different text", "Or enter your own topic"]
+
+
+def validate_suggestions_against_text(suggestions, selected_text):
+    """
+    Validate that suggestions are actually present in the selected text.
+    """
+    text_lower = selected_text.lower()
+    validated = []
+    
+    for suggestion in suggestions:
+        if suggestion.lower() in text_lower:
+            validated.append(suggestion)
+        else:
+            # If suggestion is not in text, try to find a similar term
+            words = suggestion.lower().split()
+            for word in words:
+                if word in text_lower and len(word) > 2:  # Only meaningful words
+                    validated.append(word)
+                    break
+            else:
+                # If no match found, use the original but mark it
+                validated.append(suggestion)
+    
+    # Ensure we have exactly 3 suggestions
+    while len(validated) < 3:
+        validated.append("No additional terms found")
+    
+    return validated[:3]
 
 
 def process_user_feedback(topic, current_content, feedback_type, feedback_details, sources):

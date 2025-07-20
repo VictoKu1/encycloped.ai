@@ -632,6 +632,27 @@ button:hover {
   cursor: not-allowed;
 }
 
+.generate-custom-btn.warning {
+  background: #f39c12;
+}
+
+.generate-custom-btn.warning:hover {
+  background: #e67e22;
+}
+
+/* Unclickable suggestion items */
+.suggestion-item.unclickable {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  pointer-events: none;
+}
+
+.suggestion-item.unclickable:hover {
+  background: #f8f9fa !important;
+  border-color: #e9ecef !important;
+  transform: none !important;
+}
+
 /* Loading state for suggestions */
 .suggestions-loading {
   text-align: center;
