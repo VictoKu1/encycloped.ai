@@ -70,14 +70,46 @@ db.init_db()  # Initialize the database schema at startup
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    from flask import request
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if request.method == "POST":
         topic = request.form.get("topic", "").strip()
         if topic:
-            try:
-                topic = validate_topic_slug(topic)
-                return redirect(url_for("topic_page", topic=topic))
-            except BadRequest as e:
-                return str(e), 400
+            from agents.topic_generator import validate_topic_name_with_llm
+            from utils.data_store import topic_exists
+            if topic_exists(topic.lower()):
+                try:
+                    topic = validate_topic_slug(topic)
+                    if is_ajax:
+                        return jsonify({'redirect': url_for("topic_page", topic=topic)})
+                    return redirect(url_for("topic_page", topic=topic))
+                except BadRequest as e:
+                    if is_ajax:
+                        return {"reason": str(e), "suggestions": []}, 400
+                    return str(e), 400
+            if len(topic) > 255:
+                if is_ajax:
+                    return {"reason": "The topic name is too long (max 255 characters).", "suggestions": []}, 400
+                return render_template("invalid_topic.html", reason="The topic name is too long (max 255 characters).", suggestions=[])
+            is_valid, result = validate_topic_name_with_llm(topic)
+            if is_valid:
+                try:
+                    topic = validate_topic_slug(topic)
+                    if is_ajax:
+                        return jsonify({'redirect': url_for("topic_page", topic=topic)})
+                    return redirect(url_for("topic_page", topic=topic))
+                except BadRequest as e:
+                    if is_ajax:
+                        return {"reason": str(e), "suggestions": []}, 400
+                    return str(e), 400
+            else:
+                if isinstance(result, tuple):
+                    reason, suggestions = result
+                else:
+                    reason, suggestions = result[0], result[1:] if isinstance(result, list) else []
+                if is_ajax:
+                    return {"reason": reason, "suggestions": suggestions}, 400
+                return render_template("invalid_topic.html", reason=reason, suggestions=suggestions)
     return render_template("index.html")
 
 
@@ -353,6 +385,54 @@ def suggest_topics():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logging.error(f"Error in suggest_topics: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/add_reference", methods=["POST"])
+def add_reference():
+    """
+    Add a new reference (hyperlink) to the article's markdown and persist it.
+    Expected JSON payload:
+    {
+        "article_topic": "Python",
+        "selected_text": "interpreted programming language",
+        "reference_topic": "Programming Language"
+    }
+    """
+    try:
+        data = request.get_json()
+        validate_json_payload(data, ["article_topic", "selected_text", "reference_topic"])
+        article_topic = validate_topic_slug(data["article_topic"])
+        selected_text = sanitize_text(data["selected_text"])
+        reference_topic = sanitize_text(data["reference_topic"])
+        topic_key = article_topic.lower()
+        topic_data = get_topic_data(topic_key)
+        if not topic_data:
+            return jsonify({"error": "Topic not found."}), 404
+        markdown_content = topic_data.get("markdown", "")
+        topic_suggestions = topic_data.get("topic_suggestions", [])
+        # Add the new reference topic to topic_suggestions if not present
+        if reference_topic not in topic_suggestions:
+            topic_suggestions.append(reference_topic)
+        # Replace the first occurrence of selected_text with a markdown link
+        import re
+        def replace_first(text, sub, repl):
+            pattern = re.escape(sub)
+            return re.sub(pattern, repl, text, count=1)
+        link_md = f"[{selected_text}](/" + reference_topic.replace(" ", "%20") + ")"
+        new_markdown = replace_first(markdown_content, selected_text, link_md)
+        # Save the updated markdown and topic suggestions
+        from content.markdown_processor import linkify_topics, convert_markdown, remove_duplicate_header
+        linked_markdown = linkify_topics(new_markdown, topic_suggestions)
+        html_content_final = convert_markdown(linked_markdown)
+        html_content_final = remove_duplicate_header(html_content_final, article_topic)
+        save_topic_data(topic_key, html_content_final, new_markdown, topic_suggestions)
+        return jsonify({"updated_content": html_content_final})
+    except BadRequest as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        import traceback
+        logging.error(f"Error in add_reference: {str(e)}\n{traceback.format_exc()}")
         return jsonify({"error": "Internal server error"}), 500
 
 

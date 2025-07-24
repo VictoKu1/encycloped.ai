@@ -11,7 +11,77 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+      $(function() {
+        // Set year
+        $('.currentYear').text(new Date().getFullYear());
+        // AJAX search form submission (for all forms with .search-box)
+        $(document).on('submit', '.search-box form', function(e) {
+          e.preventDefault();
+          var $form = $(this);
+          var topic = $form.find('input[name="topic"]').val().trim();
+          if (!topic) return;
+          showSpinner();
+          $.ajax({
+            url: '/',
+            method: 'POST',
+            data: $form.serialize(),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            complete: function(xhr) {
+              var data = xhr.responseJSON;
+              // If JSON with redirect, follow
+              if (data && data.redirect) {
+                window.location.href = data.redirect;
+                return;
+              }
+              // If redirected, follow
+              if (xhr.responseURL && xhr.responseURL !== window.location.href) {
+                window.location.href = xhr.responseURL;
+                return;
+              }
+              // If JSON with reason/suggestions, show modal
+              if (data && data.reason) {
+                hideSpinner();
+                showInvalidTopicModal(data.reason, data.suggestions || []);
+              } else if (typeof xhr.responseText === 'string' && xhr.responseText.startsWith('<!DOCTYPE')) {
+                // fallback: full HTML, replace page
+                document.open(); document.write(xhr.responseText); document.close();
+              } else {
+                hideSpinner();
+              }
+            }
+          });
+        });
+        // Modal close logic
+        $(document).on('click', '#close-invalid-topic-modal', function() {
+          hideInvalidTopicModal();
+        });
+        $(document).on('keydown', function(e) {
+          if ($('#invalid-topic-modal').is(':visible') && e.key === 'Escape') hideInvalidTopicModal();
+        });
+        $(document).on('click', '.suggestion-item.suggestion-link', function() {
+          var topic = $(this).data('topic');
+          if (topic) {
+            showSpinner();
+            window.location.href = '/' + encodeURIComponent(topic);
+          }
+        });
+      });
+      function showInvalidTopicModal(reason, suggestions) {
+        $('#invalid-topic-modal .selected-text-display p').text(reason);
+        var $list = $('#invalid-topic-modal #suggestions-list').empty();
+        if (suggestions && suggestions.length > 0) {
+          $('#invalid-topic-modal .suggestions-container').show();
+          suggestions.forEach(function(s) {
+            $('<div class="suggestion-item suggestion-link"></div>').text(s).attr('data-topic', s).appendTo($list);
+          });
+        } else {
+          $('#invalid-topic-modal .suggestions-container').hide();
+        }
+        $('#invalid-topic-modal').show();
+      }
+      function hideInvalidTopicModal() {
+        $('#invalid-topic-modal').hide();
+      }
     </script>
   </head>
   <body>
@@ -20,12 +90,31 @@
 
       {% endblock %}
     </main>
+    <!-- Invalid Topic Modal (hidden by default, available on all pages) -->
+    <div id="invalid-topic-modal" class="topic-suggestion-modal" style="display:none;">
+      <div class="topic-suggestion-content">
+        <div class="topic-suggestion-header">
+          <h2>Invalid Article Name</h2>
+          <button class="topic-suggestion-close" id="close-invalid-topic-modal">&times;</button>
+        </div>
+        <div class="selected-text-display">
+          <p style="color: #e74c3c; font-weight: bold;"></p>
+        </div>
+        <div class="suggestions-container" style="display:none;">
+          <h3>Did you mean:</h3>
+          <div id="suggestions-list"></div>
+        </div>
+        <div style="text-align:center; margin-top:20px;">
+          <a href="/" class="btn">Back to Search</a>
+        </div>
+      </div>
+    </div>
     <footer class="site-footer">
       <div class="copyright">
         <h6>
           Copyright © <span class="currentYear"></span>
           <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
-          All rights reserved. Design by
+          All rights reserved. Built by
           <a href="https://victoku1.netlify.app/">VictoKu1</a>
         </h6>
       </div>

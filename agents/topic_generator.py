@@ -382,3 +382,36 @@ def process_user_feedback(topic, current_content, feedback_type, feedback_detail
         reply_code, updated_content = "0", current_content
 
     return reply_code, updated_content 
+
+
+def validate_topic_name_with_llm(topic_name):
+    """
+    Use the LLM to check if the input is a valid encyclopedia article name.
+    If not, return a list of suggested valid names from the input.
+    Returns (is_valid, suggestions_or_reason).
+    """
+    prompt = (
+        f"You are an expert encyclopedia editor. A user entered the following as a potential article name: '{topic_name}'.\n"
+        "Determine if this is a valid, specific, and appropriate encyclopedia article name (not too vague, not a sentence, not a question, not a list, not a random string, not too short, not too long, not just numbers or symbols, not offensive, etc).\n"
+        "If it is a valid article name, reply with 'VALID' on the first line.\n"
+        "If it is NOT a valid article name, reply with 'INVALID' on the first line, then a short reason, then a list of up to 5 suggested valid article names that could be extracted from the input (if any).\n"
+        f"\nInput: {topic_name}\n"
+        "Reply format:\nVALID\n--or--\nINVALID\n<reason>\n- suggestion 1\n- suggestion 2\n...\n"
+    )
+    text = _call_llm([
+        {"role": "system", "content": "You are an expert encyclopedia editor."},
+        {"role": "user", "content": prompt},
+    ], max_tokens=200, temperature=0.2)
+    if text is None:
+        return False, ["Error: Unable to validate topic name."]
+    lines = text.strip().splitlines()
+    if not lines:
+        return False, ["Error: No response from LLM."]
+    if lines[0].strip().upper() == 'VALID':
+        return True, None
+    elif lines[0].strip().upper() == 'INVALID':
+        reason = lines[1] if len(lines) > 1 else "Not a valid article name."
+        suggestions = [l.lstrip('-').strip() for l in lines[2:] if l.strip().startswith('-') or l.strip()]
+        return False, (reason, suggestions)
+    else:
+        return False, ["Unrecognized response from LLM:", text] 

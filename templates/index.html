@@ -7,7 +7,9 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script>
-      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+      document.addEventListener('DOMContentLoaded', function() {
+        document.querySelector('.currentYear').textContent = new Date().getFullYear();
+      });
     </script>
   </head>
   <body>
@@ -24,12 +26,32 @@
       </div>
     </div>
 
+    <!-- Invalid Topic Modal (hidden by default) -->
+    <div id="invalid-topic-modal" class="topic-suggestion-modal" style="display:none;">
+      <div class="topic-suggestion-content">
+        <div class="topic-suggestion-header">
+          <h2>Invalid Article Name</h2>
+          <button class="topic-suggestion-close" id="close-invalid-topic-modal">&times;</button>
+        </div>
+        <div class="selected-text-display">
+          <p style="color: #e74c3c; font-weight: bold;"></p>
+        </div>
+        <div class="suggestions-container" style="display:none;">
+          <h3>Did you mean:</h3>
+          <div id="suggestions-list"></div>
+        </div>
+        <div style="text-align:center; margin-top:20px;">
+          <a href="/" class="btn">Back to Search</a>
+        </div>
+      </div>
+    </div>
+
     <footer class="site-footer">
       <div class="copyright">
         <h6>
           Copyright © <span class="currentYear"></span>
           <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
-          All rights reserved. Design by
+          All rights reserved. Built by
           <a href="https://victoku1.netlify.app/">VictoKu1</a>
         </h6>
       </div>

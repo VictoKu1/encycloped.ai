@@ -121,17 +121,55 @@ $(document).ready( function () {
     let lensIcon = null;
     let selectedText = '';
     let currentTopic = typeof topic !== 'undefined' ? topic : '';
+    let selectionRange = null; // Store the selection range for precise replacement
 
-    // Test function to verify substring logic
-    function testSubstringLogic() {
-        const testText = "interpreted programming language";
-        const testTopic = "programming";
-        const result = testText.toLowerCase().includes(testTopic.toLowerCase());
-        console.log('Test substring logic:');
-        console.log('Test text:', testText);
-        console.log('Test topic:', testTopic);
-        console.log('Result:', result);
-        return result;
+    // Utility: Check if a node is inside a link
+    function isNodeInsideLink(node) {
+        while (node) {
+            if (node.nodeType === 1 && node.tagName === 'A') return true;
+            node = node.parentNode;
+        }
+        return false;
+    }
+
+    // Utility: Get all non-linked text nodes in a selection
+    function getNonLinkedTextNodes(range) {
+        const nodes = [];
+        function getTextNodes(node) {
+            if (node.nodeType === 3 && !isNodeInsideLink(node)) {
+                nodes.push(node);
+            } else if (node.nodeType === 1 && node.childNodes) {
+                for (let child of node.childNodes) getTextNodes(child);
+            }
+        }
+        getTextNodes(range.commonAncestorContainer);
+        // Filter nodes that are actually within the range
+        return nodes.filter(node => {
+            const nodeRange = document.createRange();
+            nodeRange.selectNodeContents(node);
+            return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
+                   range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+        });
+    }
+
+    // Utility: Get all linked text nodes in a selection
+    function getLinkedTextNodes(range) {
+        const nodes = [];
+        function getTextNodes(node) {
+            if (node.nodeType === 3 && isNodeInsideLink(node)) {
+                nodes.push(node);
+            } else if (node.nodeType === 1 && node.childNodes) {
+                for (let child of node.childNodes) getTextNodes(child);
+            }
+        }
+        getTextNodes(range.commonAncestorContainer);
+        // Filter nodes that are actually within the range
+        return nodes.filter(node => {
+            const nodeRange = document.createRange();
+            nodeRange.selectNodeContents(node);
+            return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
+                   range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+        });
     }
 
     // Add blur class to background when modal is open
@@ -177,16 +215,14 @@ $(document).ready( function () {
         setTimeout(function() { // Wait for selection to update
             const selection = window.getSelection();
             selectedText = selection.toString().trim();
-            
+            selectionRange = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
             // Debug: log the selected text
             console.log('Selected text captured:', selectedText);
             console.log('Selected text length:', selectedText.length);
-            
-            if (!selectedText || selectedText.length < 10) {
+            if (!selectedText || selectedText.length < 2) {
                 hideLensIcon();
                 return;
             }
-            
             const articleContent = document.getElementById('article-content');
             if (articleContent && selection.anchorNode && articleContent.contains(selection.anchorNode)) {
                 positionLensIcon(selection);
@@ -204,16 +240,8 @@ $(document).ready( function () {
 
     // --- Modal logic ---
     function openTopicSuggestionModal(text) {
-        console.log('Opening modal with text:', text); // Debug log
-        console.log('Global selectedText variable:', selectedText); // Debug log
-        
-        // Test the substring logic
-        testSubstringLogic();
-        
-        // Use the global selectedText variable, not the parameter
+        // Always use the user's actual selected text for display and backend
         const textToUse = selectedText || text;
-        console.log('Text to use for validation:', textToUse);
-        
         $('#selected-text-display').text(textToUse);
         $('#custom-topic-input').val('');
         $('#topic-suggestion-modal').show();
@@ -243,12 +271,22 @@ $(document).ready( function () {
     // Generate topic suggestions via API
     function generateTopicSuggestions(text) {
         console.log('Sending to API:', { selected_text: text, current_topic: currentTopic }); // Debug log
-        
+
+        // Collect all already-referenced topics in the article
+        const referencedTopics = [];
+        $('#article-content a[href^="/"]').each(function() {
+            let href = $(this).attr('href');
+            if (href.startsWith('/')) {
+                let topic = decodeURIComponent(href.slice(1));
+                referencedTopics.push(topic);
+            }
+        });
+
         $.ajax({
             url: '/suggest_topics',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ selected_text: text, current_topic: currentTopic }),
+            data: JSON.stringify({ selected_text: text, current_topic: currentTopic, referenced_topics: referencedTopics }),
             success: function(response) {
                 console.log('API response:', response); // Debug log
                 if (response.suggestions && response.suggestions.length > 0) {
@@ -270,18 +308,54 @@ $(document).ready( function () {
 
     // Display clickable suggestions
     function displaySuggestions(suggestions) {
+        // Only show suggestions that are not already linked in the selection,
+        // not the current topic, and not already referenced in the article
         let html = '';
-        suggestions.forEach(function(suggestion) {
-            if (suggestion.toLowerCase().includes('no additional terms found') || 
-                suggestion.toLowerCase().includes('no terms found') ||
-                suggestion.toLowerCase().includes('topic extraction unavailable')) {
-                // Make unclickable for fallback/error messages
-                html += `<div class="suggestion-item unclickable" style="cursor: not-allowed; opacity: 0.6;">${suggestion}</div>`;
-            } else {
-                // Make clickable for valid suggestions with custom click handler
-                html += `<a href="#" class="suggestion-item topic-link" data-topic="${encodeURIComponent(suggestion)}">${suggestion}</a>`;
+        let validSuggestions = [];
+        // Normalization function: remove parenthesis and their contents, trim, lowercase
+        function normalizeTopic(t) {
+            return t.replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
+        }
+        const currentTopicLower = normalizeTopic(currentTopic ? currentTopic : '');
+
+        // Collect all already-referenced topics in the article (normalized)
+        const referencedTopics = new Set();
+        $('#article-content a[href^="/"]').each(function() {
+            let href = $(this).attr('href');
+            if (href.startsWith('/')) {
+                let topic = decodeURIComponent(href.slice(1));
+                referencedTopics.add(normalizeTopic(topic));
             }
         });
+
+        if (selectionRange) {
+            let nonLinkedNodes = getNonLinkedTextNodes(selectionRange);
+            let nonLinkedText = nonLinkedNodes.map(n => n.textContent).join(' ').toLowerCase();
+            validSuggestions = suggestions.filter(suggestion => {
+                const suggestionLower = normalizeTopic(suggestion);
+                // Exclude if matches current topic
+                if (suggestionLower === currentTopicLower) return false;
+                // Exclude if already referenced in article
+                if (referencedTopics.has(suggestionLower)) return false;
+                // Exclude if not in non-linked text
+                return nonLinkedText.includes(suggestionLower);
+            });
+        } else {
+            validSuggestions = suggestions.filter(suggestion => {
+                const suggestionLower = normalizeTopic(suggestion);
+                if (suggestionLower === currentTopicLower) return false;
+                if (referencedTopics.has(suggestionLower)) return false;
+                return true;
+            });
+        }
+        if (validSuggestions.length === 0 && suggestions.length > 0) {
+            // If all suggestions are already linked, show the linked text as the only option
+            html += `<div class="suggestion-item unclickable" style="cursor: not-allowed; opacity: 0.6;">${selectedText}</div>`;
+        } else {
+            validSuggestions.forEach(function(suggestion) {
+                html += `<a href="#" class="suggestion-item topic-link" data-topic="${encodeURIComponent(suggestion)}">${suggestion}</a>`;
+            });
+        }
         $('#suggestions-list').html(html);
     }
 
@@ -289,64 +363,66 @@ $(document).ready( function () {
     $(document).on('click', '.topic-link', function(e) {
         e.preventDefault();
         const topic = decodeURIComponent($(this).data('topic'));
-        const selectedTextLower = selectedText.toLowerCase();
-        
-        console.log('Topic suggestion clicked:', topic);
-        console.log('Selected text:', selectedText);
-        
-        // Convert selected text to link in the article content
-        convertSelectedTextToLink(selectedText, topic);
-        
-        // Close the modal
+        // Only link the chosen suggestion, not the whole selection
+        const chosenText = topic;
+        convertSelectedTextToLink(chosenText, topic);
         closeTopicSuggestionModal();
-        
-        // Navigate to the new topic
         window.location.href = `/${encodeURIComponent(topic)}`;
     });
 
     // Function to convert selected text to a link
-    function convertSelectedTextToLink(selectedText, topic) {
+    function convertSelectedTextToLink(chosenText, topic) {
         const articleContent = $('#article-content');
         const content = articleContent.html();
-        
         // Create the link HTML
-        const linkHtml = `<a href="/${encodeURIComponent(topic)}">${selectedText}</a>`;
-        
-        // Replace the selected text with the link
-        // Use a more robust replacement that handles HTML entities and case variations
-        const escapedSelectedText = selectedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escapedSelectedText, 'gi');
-        const newContent = content.replace(regex, linkHtml);
-        
-        // Update the article content
-        articleContent.html(newContent);
-        
-        console.log('Converted selected text to link:', selectedText, '→', topic);
-        
-        // Optionally save this change to the backend (you can implement this later)
-        saveTopicLinkToBackend(selectedText, topic);
+        const linkHtml = `<a href="/${encodeURIComponent(topic)}">${chosenText}</a>`;
+        // Replace only the first occurrence of the chosen text that is not already inside a link
+        // Use a DOM approach for safety
+        let replaced = false;
+        articleContent.find('*').addBack().contents().each(function() {
+            if (this.nodeType === 3 && !isNodeInsideLink(this)) {
+                const idx = this.data.indexOf(chosenText);
+                if (idx !== -1 && !replaced) {
+                    const before = this.data.slice(0, idx);
+                    const after = this.data.slice(idx + chosenText.length);
+                    const newNode = document.createElement('span');
+                    if (before) newNode.appendChild(document.createTextNode(before));
+                    const linkNode = document.createElement('a');
+                    linkNode.href = `/${encodeURIComponent(topic)}`;
+                    linkNode.textContent = chosenText;
+                    newNode.appendChild(linkNode);
+                    if (after) newNode.appendChild(document.createTextNode(after));
+                    $(this).replaceWith(newNode);
+                    replaced = true;
+                }
+            }
+        });
+        // Persist the new reference to the backend
+        saveTopicLinkToBackend(chosenText, topic);
     }
 
-    // Function to save the topic link to backend (optional)
+    // Function to save the topic link to backend (now implemented)
     function saveTopicLinkToBackend(selectedText, topic) {
-        // This could be implemented to persist the link changes
-        // For now, we'll just log it
-        console.log('Saving topic link to backend:', {
-            selected_text: selectedText,
-            topic: topic,
-            current_page: window.location.pathname
+        // Get the current article topic from the page (assume it's in a header or variable)
+        let articleTopic = $(".page-topic-header h1").text().trim() || currentTopic;
+        $.ajax({
+            url: '/add_reference',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                article_topic: articleTopic,
+                selected_text: selectedText,
+                reference_topic: topic
+            }),
+            success: function(response) {
+                if (response && response.updated_content) {
+                    $('#article-content').html(response.updated_content);
+                }
+            },
+            error: function(xhr) {
+                console.error('Error saving topic link to backend:', xhr);
+            }
         });
-        
-        // You could make an AJAX call here to save the link to your backend
-        // $.ajax({
-        //     url: '/save_topic_link',
-        //     method: 'POST',
-        //     data: {
-        //         selected_text: selectedText,
-        //         topic: topic,
-        //         current_page: window.location.pathname
-        //     }
-        // });
     }
 
     // Custom topic generation with validation
@@ -354,7 +430,7 @@ $(document).ready( function () {
         const customTopic = $('#custom-topic-input').val().trim();
         const selectedTextLower = selectedText.toLowerCase();
         const customTopicLower = customTopic.toLowerCase();
-        
+
         // Debug logging
         console.log('Debug substring check:');
         console.log('Selected text:', selectedText);
@@ -362,23 +438,23 @@ $(document).ready( function () {
         console.log('Custom topic:', customTopic);
         console.log('Custom topic (lower):', customTopicLower);
         console.log('Includes check:', selectedTextLower.includes(customTopicLower));
-        
+
         if (!customTopic) {
             alert('Please enter a topic.');
             return;
         }
-        
+
         // Check if custom topic is a substring of selected text (case-insensitive)
         if (selectedTextLower.includes(customTopicLower)) {
             // Topic is part of selected text - proceed normally
             console.log('Topic is part of selected text - proceeding');
-            
+
             // Convert selected text to link in the article content
             convertSelectedTextToLink(selectedText, customTopic);
-            
+
             // Close the modal
             closeTopicSuggestionModal();
-            
+
             // Navigate to the new topic
             window.location.href = `/${encodeURIComponent(customTopic)}`;
         } else {
@@ -387,10 +463,10 @@ $(document).ready( function () {
             if (confirm(`"${customTopic}" is not part of the selected text. Do you want to generate an article about this topic anyway?`)) {
                 // Convert selected text to link in the article content
                 convertSelectedTextToLink(selectedText, customTopic);
-                
+
                 // Close the modal
                 closeTopicSuggestionModal();
-                
+
                 // Navigate to the new topic
                 window.location.href = `/${encodeURIComponent(customTopic)}`;
             }
@@ -403,18 +479,18 @@ $(document).ready( function () {
         const selectedTextLower = selectedText.toLowerCase();
         const customTopicLower = customTopic.toLowerCase();
         const generateBtn = $('#generate-custom-btn');
-        
+
         // Debug logging for real-time validation
         console.log('Real-time validation:');
         console.log('Selected text (lower):', selectedTextLower);
         console.log('Custom topic (lower):', customTopicLower);
         console.log('Includes check:', selectedTextLower.includes(customTopicLower));
-        
+
         if (!customTopic) {
             generateBtn.text('Generate Article').removeClass('warning');
             return;
         }
-        
+
         if (selectedTextLower.includes(customTopicLower)) {
             generateBtn.text('Generate Article').removeClass('warning');
         } else {
