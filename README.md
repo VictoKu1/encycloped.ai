@@ -130,7 +130,7 @@ Follow these steps to set up the PostgreSQL database and Redis for rate limiting
 ### 1. Start Docker/PostgreSQL/Redis
 Open any terminal and run:
 ```bash
-docker-compose up -d
+docker-compose up -d  # On Linux it may require "sudo docker-compose up -d"
 ```
 This starts the PostgreSQL database **and Redis** in the background. You can close this terminal or use it for other commands.
 
