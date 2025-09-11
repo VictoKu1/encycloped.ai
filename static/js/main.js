@@ -11,11 +11,44 @@ $(document).ready( function () {
         $("#report-modal").hide();
     });
 
+    // Function to check for Wikipedia URLs
+    function hasWikipediaUrl(sources) {
+        return sources.some(url => {
+            const cleanUrl = url.trim().toLowerCase();
+            return cleanUrl.includes('wikipedia.org') || cleanUrl.includes('en.wikipedia.org');
+        });
+    }
+
+    // Function to validate sources and update button state
+    function validateSourcesAndUpdateButton(sourcesInput, submitButton) {
+        const sources = sourcesInput.val().split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const hasWikipedia = hasWikipediaUrl(sources);
+        
+        if (hasWikipedia) {
+            submitButton.prop('disabled', true).text('Remove Wikipedia URLs to submit');
+            submitButton.addClass('disabled-wikipedia');
+        } else {
+            submitButton.prop('disabled', false).text('Submit');
+            submitButton.removeClass('disabled-wikipedia');
+        }
+    }
+
+    // Real-time validation for report sources
+    $("#report-sources").on('input', function() {
+        validateSourcesAndUpdateButton($(this), $("#send-report"));
+    });
+
     // Handle report submission
     $("#send-report").click(function () {
         let topic = "{{ topic }}";
         let report_details = $("#report-details").val();
-        let sources = $("#report-sources").val().split(',');
+        let sources = $("#report-sources").val().split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+        // Double-check for Wikipedia URLs before submission
+        if (hasWikipediaUrl(sources)) {
+            alert("Please remove Wikipedia URLs from sources before submitting.");
+            return;
+        }
 
         $.ajax({
             url: "/report",
@@ -50,12 +83,23 @@ $(document).ready( function () {
         $("#add-info-modal").hide();
     });
 
+    // Real-time validation for add info sources
+    $("#info-sources").on('input', function() {
+        validateSourcesAndUpdateButton($(this), $("#send-add-info"));
+    });
+
     // Handle add info submission
     $("#send-add-info").click(function () {
         let topic = "{{ topic }}";
         let subtopic = $("#subtopic-name").val();
         let info = $("#additional-info").val();
-        let sources = $("#info-sources").val().split(',');
+        let sources = $("#info-sources").val().split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+        // Double-check for Wikipedia URLs before submission
+        if (hasWikipediaUrl(sources)) {
+            alert("Please remove Wikipedia URLs from sources before submitting.");
+            return;
+        }
 
         $.ajax({
             url: "/add_info",

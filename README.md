@@ -2,6 +2,12 @@
 
 **encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT 4.1 (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT 4.1 (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
 
+## Why Not Wikipedia?
+
+While Wikipedia has been a valuable resource, human moderated encyclopedias like Wikipedia suffer from several critical limitations that compromise their reliability and accuracy. These platforms are vulnerable to bias, vandalism, political manipulation, and inconsistent editorial standards that can lead to misinformation being presented as fact. The decentralized nature of human moderation means that articles can be edited by anyone with varying levels of expertise, leading to inconsistent quality and potential conflicts of interest. Additionally, the volunteer-based editorial process can be slow to correct errors and may be influenced by groupthink or dominant perspectives that don't represent the full spectrum of knowledge. This is why encycloped.ai uses AI moderation to ensure consistent, unbiased, and factually accurate content generation.
+
+[![Why Wikipedia Can't Be Trusted](https://img.youtube.com/vi/lk-ElX98d2g/0.jpg)](https://www.youtube.com/watch?v=lk-ElX98d2g&t=92)
+
 > **Note:** All article and topic data is stored in a persistent PostgreSQL database, ensuring data durability and multi-user support. No in-memory storage is used for articles or topics.
 
 ## Features

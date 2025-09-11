@@ -5,6 +5,14 @@
     box-sizing: border-box;
 }
 
+/* Disabled Wikipedia button styling */
+.disabled-wikipedia {
+    background-color: #e74c3c !important;
+    color: white !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+}
+
 /* Reset margins/padding if not already done */
 html,
 body {

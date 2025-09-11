@@ -83,7 +83,7 @@ def generate_topic_content(topic):
             "If the topic is unambiguous, divide the article into clear sections with headers such as 'TL;DR', 'Overview', 'History', 'Features and Syntax', 'Applications', and 'Community and Development'. "
             "At the end, include a 'References' section. In that section, list minimum 4-5 references (but as many as are appropriate for the topic), each on a separate line as a Markdown list item (each line should start with '- '). "
             "Each reference must include a title and a URL (e.g., '- [1]: Example Source <https://example.com>'). "
-            "NOTE: The sources should be valid and real, not just placeholders. Source with a URL https://example.com is not a valid source, its just an example and should not be used in any article as a source). "
+            "NOTE: The sources should be valid and real, not just placeholders. Source with a URL https://example.com is not a valid source, its just an example and should not be used in any article as a source. Do NOT use Wikipedia as a source - search for real, authoritative sources from academic institutions, government agencies, reputable organizations, or established publications. "
             "Within the article text, in-text reference markers like [1] should be clickable links that jump to the corresponding reference. "
             "Every in-text reference (e.g., [1]) must have a corresponding entry in the References section, and every reference in the list must be cited in the text. "
             "If you cannot find real references, use reputable placeholder titles and URLs. "
@@ -174,7 +174,10 @@ def update_topic_content(topic, current_content):
     prompt = (
         f"The following is an encyclopedia article about '{topic}'. Please check if any information is outdated or missing as of today. "
         "If there are updates, rewrite the article with the same structure and section headers, only updating the content where necessary. "
-        "If the article is already up to date, return it unchanged. Return your response starting with a reply code (1 for updated, 0 for unchanged) on the first line, followed by the article text.\n\n"
+        "If the article is already up to date, return it unchanged. "
+        "IMPORTANT: When updating content, do NOT use Wikipedia as a source - search for real, authoritative sources from academic institutions, government agencies, reputable organizations, or established publications. "
+        "Ensure all references in the References section are from authoritative sources, not Wikipedia. "
+        "Return your response starting with a reply code (1 for updated, 0 for unchanged) on the first line, followed by the article text.\n\n"
         f"{current_content}"
     )
     text = _call_llm([
@@ -345,21 +348,41 @@ def process_user_feedback(topic, current_content, feedback_type, feedback_detail
     """
     Process user feedback (reports or additions) using the LLM.
     """
+    # Filter out Wikipedia URLs from sources
+    def filter_wikipedia_urls(sources):
+        filtered_sources = []
+        for source in sources:
+            source_lower = source.strip().lower()
+            if 'wikipedia.org' not in source_lower and 'en.wikipedia.org' not in source_lower:
+                filtered_sources.append(source.strip())
+        return filtered_sources
+    
+    # Check if any Wikipedia URLs were present
+    original_sources = sources.copy()
+    filtered_sources = filter_wikipedia_urls(sources)
+    has_wikipedia = len(original_sources) != len(filtered_sources)
+    
+    # If Wikipedia URLs were present, decline the request
+    if has_wikipedia:
+        return "0", current_content
+    
     if feedback_type == "report":
         prompt = (
             f"The following encyclopedia article might contain errors:\n\n"
             f"{current_content}\n\n"
             f"A user reported the following issue: {feedback_details}\n"
-            f"Sources: {', '.join(sources)}\n\n"
+            f"Sources: {', '.join(filtered_sources)}\n\n"
             "If the report is valid, update the article accordingly. "
+            "IMPORTANT: Do NOT use Wikipedia as a source - search for real, authoritative sources from academic institutions, government agencies, reputable organizations, or established publications. "
             "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) "
             "on the first line, followed by the updated article content."
         )
     elif feedback_type == "add_info":
         prompt = (
             f"For the article on '{topic}', the user suggests adding the following information: {feedback_details}\n\n"
-            f"Sources: {', '.join(sources)}\n\n"
+            f"Sources: {', '.join(filtered_sources)}\n\n"
             "If this information is relevant and should be added, update the article accordingly. "
+            "IMPORTANT: Do NOT use Wikipedia as a source - search for real, authoritative sources from academic institutions, government agencies, reputable organizations, or established publications. "
             "Return your response starting with a reply code (1 for accepted, 0 for irrelevant) on the first line, "
             "followed by the updated article text that includes this new information."
         )
