@@ -401,6 +401,180 @@ def save_topic_data(topic_key: str, content: str,
 - **AJAX Requests**: Send feedback and suggestions to backend
 - **Form Validation**: Client-side validation
 - **Event Handling**: User interaction management
+- **Hamburger Menu**: Recent topics navigation and local storage
+
+### Hamburger Menu Implementation
+
+The hamburger menu provides users with quick access to their recently viewed topics, stored locally in the browser.
+
+#### HTML Structure
+
+**Base Template (`templates/base.html`)**:
+```html
+<!-- Hamburger Menu Button -->
+<button id="hamburger-menu" class="hamburger-menu" title="Recent Topics">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
+
+<!-- Sidebar for Recent Topics -->
+<div id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <h3>Recent Topics</h3>
+    <button id="close-sidebar" class="close-sidebar">&times;</button>
+  </div>
+  <div class="sidebar-content">
+    <div id="recent-topics-list" class="recent-topics-list">
+      <p class="no-topics">No recent topics yet</p>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay for sidebar -->
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+```
+
+#### CSS Styling
+
+**Key CSS Classes**:
+```css
+.hamburger-menu {
+    background-color: #f2f2f2;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    margin-right: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    width: 30px;
+    height: 30px;
+    z-index: 1001;
+    position: relative;
+    border-radius: 4px;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 300px;
+    height: 100vh;
+    background-color: #2c3e50;
+    color: white;
+    transition: left 0.3s ease;
+    z-index: 1003;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar.open {
+    left: 0;
+}
+```
+
+#### JavaScript Functionality
+
+**Core Functions**:
+```javascript
+// Recent topics storage key
+const RECENT_TOPICS_KEY = 'encycloped_ai_recent_topics';
+const MAX_RECENT_TOPICS = 20;
+
+// Save topic to recent topics
+function saveTopicToRecent(topic) {
+    if (!topic) return;
+    
+    let recentTopics = JSON.parse(localStorage.getItem(RECENT_TOPICS_KEY) || '[]');
+    
+    // Remove if already exists (to move to top)
+    recentTopics = recentTopics.filter(t => t.topic !== topic);
+    
+    // Add to beginning
+    recentTopics.unshift({
+        topic: topic,
+        timestamp: Date.now(),
+        url: window.location.href
+    });
+    
+    // Keep only the most recent topics
+    if (recentTopics.length > MAX_RECENT_TOPICS) {
+        recentTopics = recentTopics.slice(0, MAX_RECENT_TOPICS);
+    }
+    
+    localStorage.setItem(RECENT_TOPICS_KEY, JSON.stringify(recentTopics));
+    updateRecentTopicsDisplay();
+}
+
+// Toggle sidebar
+function toggleSidebar() {
+    const $sidebar = $('#sidebar');
+    const $overlay = $('#sidebar-overlay');
+    const $hamburger = $('#hamburger-menu');
+    
+    $sidebar.toggleClass('open');
+    $overlay.toggleClass('open');
+    $hamburger.toggleClass('active');
+    $('body').toggleClass('sidebar-open');
+}
+```
+
+#### Features
+
+1. **Local Storage**: Topics are stored in browser's localStorage
+2. **Automatic Tracking**: Topics are automatically added when visited
+3. **Sorting**: Topics are sorted by most recent first
+4. **Persistence**: Data persists across browser sessions
+5. **Responsive**: Works on desktop and mobile devices
+6. **Accessibility**: Keyboard navigation (Escape to close)
+
+#### Data Structure
+
+**Recent Topics Storage**:
+```javascript
+[
+    {
+        "topic": "Python (Programming Language)",
+        "timestamp": 1703123456789,
+        "url": "http://localhost:5000/python%20%28programming%20language%29"
+    },
+    {
+        "topic": "Machine Learning",
+        "timestamp": 1703123400000,
+        "url": "http://localhost:5000/machine%20learning"
+    }
+]
+```
+
+#### Event Handlers
+
+```javascript
+// Hamburger menu click
+$('#hamburger-menu').click(function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSidebar();
+});
+
+// Close sidebar
+$('#close-sidebar').click(function(e) {
+    e.preventDefault();
+    closeSidebar();
+});
+
+// Overlay click to close
+$('#sidebar-overlay').click(function(e) {
+    e.preventDefault();
+    closeSidebar();
+});
+
+// Escape key to close
+$(document).keydown(function(e) {
+    if (e.key === 'Escape' && $('#sidebar').hasClass('open')) {
+        closeSidebar();
+    }
+});
+```
 
 ## LLM Integration
 

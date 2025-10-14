@@ -11,9 +11,30 @@
     </script>
   </head>
   <body>
-    <!-- Header with site name on left and search icon on right -->
+    <!-- Sidebar for Recent Topics -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3>Recent Topics</h3>
+        <button id="close-sidebar" class="close-sidebar">&times;</button>
+      </div>
+      <div class="sidebar-content">
+        <div id="recent-topics-list" class="recent-topics-list">
+          <p class="no-topics">No recent topics yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay for sidebar -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Header with hamburger menu, site name, and search icon -->
     <header class="page-header">
       <div class="header-left">
+        <button id="hamburger-menu" class="hamburger-menu" title="Recent Topics">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
         <a href="/">encycloped.ai</a>
       </div>
       <div class="header-right">
@@ -38,7 +59,9 @@
             <p>{{ ambiguous_intro }}</p>
             <ul>
               {% for meaning in ambiguous_meanings %}
-                <li><a href="/{{ meaning|replace(' ', '%20') }}">{{ meaning }}</a></li>
+                <li>
+                  <a href="/{{ meaning|replace(' ', '%20') }}">{{ meaning }}</a>
+                </li>
               {% endfor %}
             </ul>
           </div>
@@ -51,8 +74,8 @@
       </div>
       <!-- Other elements like modals go here -->
 
-       <!-- Button to open the modal -->
-      <button id="report-btn" class="btn" >Report an Issue</button>
+      <!-- Button to open the modal -->
+      <button id="report-btn" class="btn">Report an Issue</button>
 
       <!-- The Report Modal -->
       <div id="report-modal" class="modal">
@@ -60,24 +83,23 @@
           <span id="close-report" class="close">&times;</span>
           <h2>Report Issue</h2>
           <textarea id="report-details" placeholder="Describe the issue..."></textarea>
-          <input id="report-sources" type="text" placeholder="Sources (comma-separated)">
+          <input id="report-sources" type="text" placeholder="Sources (comma-separated)" />
           <button id="send-report">Submit</button>
         </div>
       </div>
       <!-- Button to open the modal -->
       <button id="add-info-btn" class="btn">Add Missing Info</button>
 
-      <!-- The Add-info Modal-->
+      <!-- The Add-info Modal -->
       <div id="add-info-modal" class="modal">
         <div class="modal-content">
           <span id="close-add-info" class="close">&times;</span>
           <h2>Add Missing Information</h2>
           <textarea id="additional-info" placeholder="Add information..."></textarea>
-          <input id="info-sources" type="text" placeholder="Sources (comma-separated)">
+          <input id="info-sources" type="text" placeholder="Sources (comma-separated)" />
           <button id="send-add-info">Submit</button>
         </div>
       </div>
-
     </div> <!-- END .container -->
 
     <!-- Topic Suggestion Modal (moved outside .container) -->
@@ -88,7 +110,9 @@
           <button class="topic-suggestion-close" id="close-topic-suggestion">&times;</button>
         </div>
         <div class="selected-text-display">
-          <p><strong>Selected text:</strong> <span id="selected-text-display"></span></p>
+          <p>
+            <strong>Selected text:</strong> <span id="selected-text-display"></span>
+          </p>
         </div>
         <div class="suggestions-container">
           <h3>Suggested Topics</h3>
@@ -98,7 +122,7 @@
         </div>
         <div class="custom-topic-section">
           <h3>Or Enter Your Own Topic</h3>
-          <input type="text" id="custom-topic-input" class="custom-topic-input" placeholder="Enter a topic to explore...">
+          <input type="text" id="custom-topic-input" class="custom-topic-input" placeholder="Enter a topic to explore..." />
           <button id="generate-custom-btn" class="generate-custom-btn">Generate Article</button>
         </div>
       </div>

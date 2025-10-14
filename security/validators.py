@@ -9,19 +9,39 @@ from datetime import datetime
 from werkzeug.exceptions import BadRequest
 import bleach
 
-# Allow most printable, non-control ASCII symbols except backslash and grave accent
-TOPIC_SLUG_REGEX = re.compile(r'^[a-zA-Z0-9_\-\s\+#\(\)\.,:;!\?/\[\]\{\}\'\"&\*%\$@\^=~\|<>]{1,100}$')
+# Allow Unicode characters from any language plus common symbols
+# This includes Latin, Cyrillic, Arabic, Greek, Japanese, Chinese, Korean, and other scripts
+# Allow any printable Unicode character except control characters and potentially dangerous ones
+TOPIC_SLUG_REGEX = re.compile(
+    r"^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f<>]{1,100}$", re.UNICODE
+)
 
 # Configure allowed HTML tags and attributes
-ALLOWED_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'blockquote', 'code']
+ALLOWED_TAGS = [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "ul",
+    "ol",
+    "li",
+    "strong",
+    "em",
+    "a",
+    "blockquote",
+    "code",
+]
 ALLOWED_ATTRIBUTES = {
-    'a': ['href', 'title'],
-    'h1': ['id'],
-    'h2': ['id'],
-    'h3': ['id'],
-    'h4': ['id'],
-    'h5': ['id'],
-    'h6': ['id']
+    "a": ["href", "title"],
+    "h1": ["id"],
+    "h2": ["id"],
+    "h3": ["id"],
+    "h4": ["id"],
+    "h5": ["id"],
+    "h6": ["id"],
 }
 
 
@@ -29,16 +49,15 @@ def validate_topic_slug(topic):
     """Validate topic slug against allowed pattern."""
     if not TOPIC_SLUG_REGEX.match(topic):
         raise BadRequest("Invalid topic name")
-    return topic.lower()  # Convert to lowercase
+    # Convert to lowercase for consistent database storage
+    # This works for both ASCII and Unicode characters
+    return topic.lower()
 
 
 def sanitize_html(html_content):
     """Sanitize HTML content using bleach."""
     return bleach.clean(
-        html_content,
-        tags=ALLOWED_TAGS,
-        attributes=ALLOWED_ATTRIBUTES,
-        strip=True
+        html_content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES, strip=True
     )
 
 
@@ -64,10 +83,10 @@ def validate_json_payload(data, required_fields):
     """Validate JSON payload has all required fields."""
     if not data:
         raise BadRequest("Invalid JSON payload")
-    
+
     if not all(field in data for field in required_fields):
         raise BadRequest(f"Missing required fields: {required_fields}")
-    
+
     return True
 
 
@@ -75,4 +94,4 @@ def validate_rate_limit(request, limiter):
     """Validate rate limiting for requests."""
     # This is handled by Flask-Limiter decorators
     # This function can be used for custom rate limiting logic if needed
-    pass 
+    pass

@@ -1,4 +1,145 @@
-$(document).ready( function () {
+$(document).ready(function () {
+    // --- HAMBURGER MENU FUNCTIONALITY ---
+    // Recent topics storage key
+    const RECENT_TOPICS_KEY = 'encycloped_ai_recent_topics';
+    const MAX_RECENT_TOPICS = 20;
+
+    // Get current topic from page
+    function getCurrentTopic() {
+        // Try to get topic from various sources
+        const topicHeader = $('.page-topic-header h1').text().trim();
+        if (topicHeader) return topicHeader;
+
+        // Try to get from URL if on topic page
+        const path = window.location.pathname;
+        if (path && path !== '/' && path !== '/index.html') {
+            return decodeURIComponent(path.substring(1));
+        }
+
+        return null;
+    }
+
+    // Save topic to recent topics
+    function saveTopicToRecent(topic) {
+        if (!topic) return;
+
+        let recentTopics = JSON.parse(localStorage.getItem(RECENT_TOPICS_KEY) || '[]');
+
+        // Remove if already exists (to move to top)
+        recentTopics = recentTopics.filter(t => t.topic !== topic);
+
+        // Add to beginning
+        recentTopics.unshift({
+            topic: topic,
+            timestamp: Date.now(),
+            url: window.location.href
+        });
+
+        // Keep only the most recent topics
+        if (recentTopics.length > MAX_RECENT_TOPICS) {
+            recentTopics = recentTopics.slice(0, MAX_RECENT_TOPICS);
+        }
+
+        localStorage.setItem(RECENT_TOPICS_KEY, JSON.stringify(recentTopics));
+        updateRecentTopicsDisplay();
+    }
+
+    // Update the recent topics display
+    function updateRecentTopicsDisplay() {
+        const recentTopics = JSON.parse(localStorage.getItem(RECENT_TOPICS_KEY) || '[]');
+        const $list = $('#recent-topics-list');
+
+        if (recentTopics.length === 0) {
+            $list.html('<p class="no-topics">No recent topics yet</p>');
+            return;
+        }
+
+        let html = '';
+        recentTopics.forEach(function (item) {
+            const timeAgo = getTimeAgo(item.timestamp);
+            html += `
+                <a href="/${encodeURIComponent(item.topic)}" class="recent-topic-item" data-topic="${encodeURIComponent(item.topic)}">
+                    <div class="topic-name">${item.topic}</div>
+                    <div class="topic-time">${timeAgo}</div>
+                </a>
+            `;
+        });
+
+        $list.html(html);
+    }
+
+    // Get time ago string
+    function getTimeAgo(timestamp) {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        return new Date(timestamp).toLocaleDateString();
+    }
+
+    // Toggle sidebar
+    function toggleSidebar() {
+        const $sidebar = $('#sidebar');
+        const $overlay = $('#sidebar-overlay');
+        const $hamburger = $('#hamburger-menu');
+
+        $sidebar.toggleClass('open');
+        $overlay.toggleClass('open');
+        $hamburger.toggleClass('active');
+        $('body').toggleClass('sidebar-open');
+    }
+
+    // Close sidebar
+    function closeSidebar() {
+        const $sidebar = $('#sidebar');
+        const $overlay = $('#sidebar-overlay');
+        const $hamburger = $('#hamburger-menu');
+
+        $sidebar.removeClass('open');
+        $overlay.removeClass('open');
+        $hamburger.removeClass('active');
+        $('body').removeClass('sidebar-open');
+    }
+
+    // Event handlers for hamburger menu
+    $('#hamburger-menu').click(function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSidebar();
+    });
+
+    $('#close-sidebar').click(function (e) {
+        e.preventDefault();
+        closeSidebar();
+    });
+
+    $('#sidebar-overlay').click(function (e) {
+        e.preventDefault();
+        closeSidebar();
+    });
+
+    // Close sidebar on escape key
+    $(document).keydown(function (e) {
+        if (e.key === 'Escape' && $('#sidebar').hasClass('open')) {
+            closeSidebar();
+        }
+    });
+
+    // Save current topic when page loads
+    const currentTopicForRecent = getCurrentTopic();
+    if (currentTopicForRecent) {
+        saveTopicToRecent(currentTopicForRecent);
+    }
+
+    // Update display on page load
+    updateRecentTopicsDisplay();
+
     // Toggle edit form when the edit (pen) icon is clicked
     $("#search-btn").click(function () {
         $("#edit-form").toggle();
@@ -23,7 +164,7 @@ $(document).ready( function () {
     function validateSourcesAndUpdateButton(sourcesInput, submitButton) {
         const sources = sourcesInput.val().split(',').map(s => s.trim()).filter(s => s.length > 0);
         const hasWikipedia = hasWikipediaUrl(sources);
-        
+
         if (hasWikipedia) {
             submitButton.prop('disabled', true).text('Remove Wikipedia URLs to submit');
             submitButton.addClass('disabled-wikipedia');
@@ -34,7 +175,7 @@ $(document).ready( function () {
     }
 
     // Real-time validation for report sources
-    $("#report-sources").on('input', function() {
+    $("#report-sources").on('input', function () {
         validateSourcesAndUpdateButton($(this), $("#send-report"));
     });
 
@@ -84,7 +225,7 @@ $(document).ready( function () {
     });
 
     // Real-time validation for add info sources
-    $("#info-sources").on('input', function() {
+    $("#info-sources").on('input', function () {
         validateSourcesAndUpdateButton($(this), $("#send-add-info"));
     });
 
@@ -137,22 +278,22 @@ $(document).ready( function () {
     }
 
     // Show spinner on search submit
-    $(document).on('submit', 'form[action="/"], form[action^="/"]', function(e) {
+    $(document).on('submit', 'form[action="/"], form[action^="/"]', function (e) {
         showSpinner();
     });
     // Show spinner on topic link click
-    $(document).on('click', 'a', function(e) {
+    $(document).on('click', 'a', function (e) {
         var href = $(this).attr('href');
         if (href && href.startsWith('/') && !href.startsWith('/static/')) {
             showSpinner();
         }
     });
     // Hide spinner when content is loaded
-    $(window).on('load', function() {
+    $(window).on('load', function () {
         hideSpinner();
     });
     // Hide spinner after AJAX loads article content
-    $(document).ajaxComplete(function() {
+    $(document).ajaxComplete(function () {
         hideSpinner();
     });
 
@@ -164,7 +305,7 @@ $(document).ready( function () {
     // --- TOPIC SUGGESTION FEATURE ---
     let lensIcon = null;
     let selectedText = '';
-    let currentTopic = typeof topic !== 'undefined' ? topic : '';
+    let currentTopicForSelection = typeof topic !== 'undefined' ? topic : '';
     let selectionRange = null; // Store the selection range for precise replacement
 
     // Utility: Check if a node is inside a link
@@ -192,7 +333,7 @@ $(document).ready( function () {
             const nodeRange = document.createRange();
             nodeRange.selectNodeContents(node);
             return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
-                   range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+                range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
         });
     }
 
@@ -212,7 +353,7 @@ $(document).ready( function () {
             const nodeRange = document.createRange();
             nodeRange.selectNodeContents(node);
             return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
-                   range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+                range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
         });
     }
 
@@ -255,8 +396,8 @@ $(document).ready( function () {
     }
 
     // Show lens icon on mouseup after selection (not on right-click)
-    $(document).on('mouseup', function(e) {
-        setTimeout(function() { // Wait for selection to update
+    $(document).on('mouseup', function (e) {
+        setTimeout(function () { // Wait for selection to update
             const selection = window.getSelection();
             selectedText = selection.toString().trim();
             selectionRange = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
@@ -278,7 +419,7 @@ $(document).ready( function () {
 
     // Hide lens icon on scroll, resize, or clicking elsewhere
     $(window).on('scroll resize', hideLensIcon);
-    $(document).on('mousedown', function(e) {
+    $(document).on('mousedown', function (e) {
         if (!$(e.target).hasClass('lens-icon')) hideLensIcon();
     });
 
@@ -302,7 +443,7 @@ $(document).ready( function () {
     }
 
     // Lens icon click opens modal and triggers suggestions
-    $(document).on('click', '.lens-icon', function(e) {
+    $(document).on('click', '.lens-icon', function (e) {
         e.preventDefault();
         e.stopPropagation();
         console.log('Lens icon clicked, selectedText:', selectedText); // Debug log
@@ -314,11 +455,11 @@ $(document).ready( function () {
 
     // Generate topic suggestions via API
     function generateTopicSuggestions(text) {
-        console.log('Sending to API:', { selected_text: text, current_topic: currentTopic }); // Debug log
+        console.log('Sending to API:', { selected_text: text, current_topic: currentTopicForSelection }); // Debug log
 
         // Collect all already-referenced topics in the article
         const referencedTopics = [];
-        $('#article-content a[href^="/"]').each(function() {
+        $('#article-content a[href^="/"]').each(function () {
             let href = $(this).attr('href');
             if (href.startsWith('/')) {
                 let topic = decodeURIComponent(href.slice(1));
@@ -330,8 +471,8 @@ $(document).ready( function () {
             url: '/suggest_topics',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ selected_text: text, current_topic: currentTopic, referenced_topics: referencedTopics }),
-            success: function(response) {
+            data: JSON.stringify({ selected_text: text, current_topic: currentTopicForSelection, referenced_topics: referencedTopics }),
+            success: function (response) {
                 console.log('API response:', response); // Debug log
                 if (response.suggestions && response.suggestions.length > 0) {
                     displaySuggestions(response.suggestions);
@@ -339,7 +480,7 @@ $(document).ready( function () {
                     $('#suggestions-list').html('<p>No topics found in the selected text. Try selecting different text or enter your own topic.</p>');
                 }
             },
-            error: function(xhr) {
+            error: function (xhr) {
                 console.error('API error:', xhr); // Debug log
                 let errorMessage = 'Error extracting topics from text.';
                 if (xhr.responseJSON && xhr.responseJSON.error) {
@@ -360,11 +501,11 @@ $(document).ready( function () {
         function normalizeTopic(t) {
             return t.replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
         }
-        const currentTopicLower = normalizeTopic(currentTopic ? currentTopic : '');
+        const currentTopicLower = normalizeTopic(currentTopicForSelection ? currentTopicForSelection : '');
 
         // Collect all already-referenced topics in the article (normalized)
         const referencedTopics = new Set();
-        $('#article-content a[href^="/"]').each(function() {
+        $('#article-content a[href^="/"]').each(function () {
             let href = $(this).attr('href');
             if (href.startsWith('/')) {
                 let topic = decodeURIComponent(href.slice(1));
@@ -396,7 +537,7 @@ $(document).ready( function () {
             // If all suggestions are already linked, show the linked text as the only option
             html += `<div class="suggestion-item unclickable" style="cursor: not-allowed; opacity: 0.6;">${selectedText}</div>`;
         } else {
-            validSuggestions.forEach(function(suggestion) {
+            validSuggestions.forEach(function (suggestion) {
                 html += `<a href="#" class="suggestion-item topic-link" data-topic="${encodeURIComponent(suggestion)}">${suggestion}</a>`;
             });
         }
@@ -404,7 +545,7 @@ $(document).ready( function () {
     }
 
     // Handle topic suggestion clicks
-    $(document).on('click', '.topic-link', function(e) {
+    $(document).on('click', '.topic-link', function (e) {
         e.preventDefault();
         const topic = decodeURIComponent($(this).data('topic'));
         // Only link the chosen suggestion, not the whole selection
@@ -423,7 +564,7 @@ $(document).ready( function () {
         // Replace only the first occurrence of the chosen text that is not already inside a link
         // Use a DOM approach for safety
         let replaced = false;
-        articleContent.find('*').addBack().contents().each(function() {
+        articleContent.find('*').addBack().contents().each(function () {
             if (this.nodeType === 3 && !isNodeInsideLink(this)) {
                 const idx = this.data.indexOf(chosenText);
                 if (idx !== -1 && !replaced) {
@@ -458,19 +599,19 @@ $(document).ready( function () {
                 selected_text: selectedText,
                 reference_topic: topic
             }),
-            success: function(response) {
+            success: function (response) {
                 if (response && response.updated_content) {
                     $('#article-content').html(response.updated_content);
                 }
             },
-            error: function(xhr) {
+            error: function (xhr) {
                 console.error('Error saving topic link to backend:', xhr);
             }
         });
     }
 
     // Custom topic generation with validation
-    $('#generate-custom-btn').click(function() {
+    $('#generate-custom-btn').click(function () {
         const customTopic = $('#custom-topic-input').val().trim();
         const selectedTextLower = selectedText.toLowerCase();
         const customTopicLower = customTopic.toLowerCase();
@@ -518,7 +659,7 @@ $(document).ready( function () {
     });
 
     // Real-time validation for custom topic input
-    $('#custom-topic-input').on('input', function() {
+    $('#custom-topic-input').on('input', function () {
         const customTopic = $(this).val().trim();
         const selectedTextLower = selectedText.toLowerCase();
         const customTopicLower = customTopic.toLowerCase();
@@ -542,18 +683,18 @@ $(document).ready( function () {
         }
     });
 
-    $('#custom-topic-input').keypress(function(e) {
+    $('#custom-topic-input').keypress(function (e) {
         if (e.which === 13) { $('#generate-custom-btn').click(); }
     });
 
     // Modal close logic
     $('#close-topic-suggestion').click(closeTopicSuggestionModal);
-    $(window).on('mousedown', function(e) {
+    $(window).on('mousedown', function (e) {
         if ($(e.target).is('#topic-suggestion-modal')) closeTopicSuggestionModal();
     });
 
     // --- Accessibility: focus trap and ESC close ---
-    $(document).on('keydown', function(e) {
+    $(document).on('keydown', function (e) {
         if ($('#topic-suggestion-modal').is(':visible')) {
             if (e.key === 'Escape') closeTopicSuggestionModal();
         }

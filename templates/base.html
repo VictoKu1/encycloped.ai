@@ -10,12 +10,149 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script>
       $(function() {
         // Set year
         $('.currentYear').text(new Date().getFullYear());
+        
+        // --- HAMBURGER MENU FUNCTIONALITY ---
+        // Recent topics storage key
+        const RECENT_TOPICS_KEY = 'encycloped_ai_recent_topics';
+        const MAX_RECENT_TOPICS = 20;
+
+        // Get current topic from page
+        function getCurrentTopic() {
+            // Try to get topic from various sources
+            const topicHeader = $('.pageTopicHeader h1').text().trim();
+            if (topicHeader) return topicHeader;
+            
+            // Try to get from URL if on topic page
+            const path = window.location.pathname;
+            if (path && path !== '/' && path !== '/index.html') {
+                return decodeURIComponent(path.substring(1));
+            }
+            
+            return null;
+        }
+        // Save topic to recent topics
+        function saveTopicToRecent(topic) {
+            if (!topic) return;
+            
+            let recentTopics = JSON.parse(localStorage.getItem(RECENT_TOPICS_KEY) || '[]');
+            
+            // Remove if already exists (to move to top)
+            recentTopics = recentTopics.filter(t => t.topic !== topic);
+            
+            // Add to beginning
+            recentTopics.unshift({
+                topic: topic,
+                timestamp: Date.now(),
+                url: window.location.href
+            });
+            
+            // Keep only the most recent topics
+            if (recentTopics.length > MAX_RECENT_TOPICS) {
+                recentTopics = recentTopics.slice(0, MAX_RECENT_TOPICS);
+            }
+            
+            localStorage.setItem(RECENT_TOPICS_KEY, JSON.stringify(recentTopics));
+            updateRecentTopicsDisplay();
+        }
+
+        // Update the recent topics display
+        function updateRecentTopicsDisplay() {
+            const recentTopics = JSON.parse(localStorage.getItem(RECENT_TOPICS_KEY) || '[]');
+            const $list = $('#recentTopicsList');
+            
+            if (recentTopics.length === 0) {
+                $list.html('<p class="noTopics">No recent topics yet</p>');
+                return;
+            }
+            
+            let html = '';
+            recentTopics.forEach(function(item) {
+                const timeAgo = getTimeAgo(item.timestamp);
+                html += '<a href="/' + encodeURIComponent(item.topic) + '" class="recentTopicItem" data-topic="' + encodeURIComponent(item.topic) + '">' +
+                        '<div class="topicName">' + item.topic + '</div>' +
+                        '<div class="topicTime">' + timeAgo + '</div>' +
+                        '</a>';
+            });
+            
+            $list.html(html);
+        }
+
+        // Get time ago string
+        function getTimeAgo(timestamp) {
+            const now = Date.now();
+            const diff = now - timestamp;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            if (days < 7) return `${days}d ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        // Toggle sidebar
+        function toggleSidebar() {
+            const $sidebar = $('#sidebar');
+            const $overlay = $('#sidebarOverlay');
+            const $hamburger = $('#hamburgerMenu');
+            
+            $sidebar.toggleClass('open');
+            $overlay.toggleClass('open');
+            $hamburger.toggleClass('active');
+            $('body').toggleClass('sidebarOpen');
+        }
+
+        // Close sidebar
+        function closeSidebar() {
+            const $sidebar = $('#sidebar');
+            const $overlay = $('#sidebarOverlay');
+            const $hamburger = $('#hamburgerMenu');
+            
+            $sidebar.removeClass('open');
+            $overlay.removeClass('open');
+            $hamburger.removeClass('active');
+            $('body').removeClass('sidebarOpen');
+        }
+
+        // Event handlers for hamburger menu
+        $('#hamburgerMenu').click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+
+        $('#closeSidebar').click(function(e) {
+            e.preventDefault();
+            closeSidebar();
+        });
+
+        $('#sidebarOverlay').click(function(e) {
+            e.preventDefault();
+            closeSidebar();
+        });
+
+        // Close sidebar on escape key
+        $(document).keydown(function(e) {
+            if (e.key === 'Escape' && $('#sidebar').hasClass('open')) {
+                closeSidebar();
+            }
+        });
+
+        // Save current topic when page loads
+        const currentTopic = getCurrentTopic();
+        if (currentTopic) {
+            saveTopicToRecent(currentTopic);
+        }
+
+        // Update display on page load
+        updateRecentTopicsDisplay();
         // AJAX search form submission (for all forms with .search-box)
-        $(document).on('submit', '.search-box form', function(e) {
+        $(document).on('submit', '.searchBox form', function(e) {
           e.preventDefault();
           var $form = $(this);
           var topic = $form.find('input[name="topic"]').val().trim();
@@ -42,7 +179,7 @@
               if (data && data.reason) {
                 hideSpinner();
                 showInvalidTopicModal(data.reason, data.suggestions || []);
-              } else if (typeof xhr.responseText === 'string' && xhr.responseText.startsWith('<!DOCTYPE')) {
+              } else if (typeof xhr.responseText === 'string' && xhr.responseText.startsWith("<!DOCTYPE")) {
                 // fallback: full HTML, replace page
                 document.open(); document.write(xhr.responseText); document.close();
               } else {
@@ -52,13 +189,13 @@
           });
         });
         // Modal close logic
-        $(document).on('click', '#close-invalid-topic-modal', function() {
+        $(document).on('click', '#closeInvalidTopicModal', function() {
           hideInvalidTopicModal();
         });
         $(document).on('keydown', function(e) {
-          if ($('#invalid-topic-modal').is(':visible') && e.key === 'Escape') hideInvalidTopicModal();
+          if ($('#invalidTopicModal').is(':visible') && e.key === 'Escape') hideInvalidTopicModal();
         });
-        $(document).on('click', '.suggestion-item.suggestion-link', function() {
+        $(document).on('click', '.suggestionItem.suggestionLink', function() {
           var topic = $(this).data('topic');
           if (topic) {
             showSpinner();
@@ -67,59 +204,72 @@
         });
       });
       function showInvalidTopicModal(reason, suggestions) {
-        $('#invalid-topic-modal .selected-text-display p').text(reason);
-        var $list = $('#invalid-topic-modal #suggestions-list').empty();
+        $('#invalidTopicModal .selectedTextDisplay p').text(reason);
+        var $list = $('#invalidTopicModal #suggestionsList').empty();
         if (suggestions && suggestions.length > 0) {
-          $('#invalid-topic-modal .suggestions-container').show();
+          $('#invalidTopicModal .suggestionsContainer').show();
           suggestions.forEach(function(s) {
-            $('<div class="suggestion-item suggestion-link"></div>').text(s).attr('data-topic', s).appendTo($list);
+            $('<div class="suggestionItem suggestionLink"></div>').text(s).attr('data-topic', s).appendTo($list);
           });
         } else {
-          $('#invalid-topic-modal .suggestions-container').hide();
+          $('#invalidTopicModal .suggestionsContainer').hide();
         }
-        $('#invalid-topic-modal').show();
+        $('#invalidTopicModal').show();
       }
       function hideInvalidTopicModal() {
-        $('#invalid-topic-modal').hide();
+        $('#invalidTopicModal').hide();
       }
-    </script>
+  </script>
   </head>
   <body>
+    <!-- Hamburger Menu Button -->
+    <button id="hamburgerMenu" class="hamburgerMenu" title="Recent Topics">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <!-- Sidebar for Recent Topics -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebarHeader">
+        <h3>Recent Topics</h3>
+        <button id="closeSidebar" class="closeSidebar">&times;</button>
+      </div>
+      <div class="sidebarContent">
+        <div id="recentTopicsList" class="recentTopicsList">
+          <p class="noTopics">No recent topics yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay for sidebar -->
+    <div id="sidebarOverlay" class="sidebarOverlay"></div>
+
     <main>
       {% block content %}
 
       {% endblock %}
     </main>
     <!-- Invalid Topic Modal (hidden by default, available on all pages) -->
-    <div id="invalid-topic-modal" class="topic-suggestion-modal" style="display:none;">
-      <div class="topic-suggestion-content">
-        <div class="topic-suggestion-header">
+    <div id="invalidTopicModal" class="topicSuggestionModal hidden">
+      <div class="topicSuggestionContent">
+        <div class="topicSuggestionHeader">
           <h2>Invalid Article Name</h2>
-          <button class="topic-suggestion-close" id="close-invalid-topic-modal">&times;</button>
+          <button class="topicSuggestionClose" id="closeInvalidTopicModal">&times;</button>
         </div>
-        <div class="selected-text-display">
-          <p style="color: #e74c3c; font-weight: bold;"></p>
+        <div class="selectedTextDisplay">
+          <p class="errorText"></p>
         </div>
-        <div class="suggestions-container" style="display:none;">
+        <div class="suggestionsContainer hidden">
           <h3>Did you mean:</h3>
-          <div id="suggestions-list"></div>
+          <div id="suggestionsList"></div>
         </div>
-        <div style="text-align:center; margin-top:20px;">
-          <a href="/" class="btn">Back to Search</a>
+        <div class="modalActions">
+          <a href="index" class="btn">Back to Search</a>
         </div>
       </div>
     </div>
-    <footer class="site-footer">
-      <div class="copyright">
-        <h6>
-          Copyright © <span class="currentYear"></span>
-          <a href="https://github.com/VictoKu1/encycloped.ai">encycloped.ai</a>
-          All rights reserved. Built by
-          <a href="https://victoku1.netlify.app/">VictoKu1</a>
-        </h6>
-      </div>
-    </footer>
     <!-- MathJax for LaTeX math rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn-jsdelivr-net/npm/mathjax-3/es5/tex-mml-chtml-js"></script>
   </body>
 </html>

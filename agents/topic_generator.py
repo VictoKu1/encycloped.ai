@@ -29,30 +29,28 @@ def set_llm_mode(use_local: bool):
         logging.info("Using OpenAI API mode")
 
 
-def _call_llm(messages: list, max_tokens: int = 800, temperature: float = 0.7) -> Optional[str]:
+def _call_llm(messages: list) -> Optional[str]:
     """Unified interface to call either OpenAI or local LLM."""
     global USE_LOCAL_LLM, client
-    
+
     if USE_LOCAL_LLM:
         local_client = get_local_llm_client()
         if local_client is None:
             logging.error("Local LLM client not available")
             return None
-        
+
         model = get_local_llm_model()
-        return local_client.generate(model, messages, max_tokens, temperature)
+        return local_client.generate(model, messages)
     else:
         # Initialize OpenAI client lazily
         if client is None:
             client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        
+
         try:
             response = client.chat.completions.create(
                 model="gpt-4.1",
                 store=True,
                 messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -66,7 +64,7 @@ def generate_topic_content(topic):
     If the topic is ambiguous (has multiple common meanings), do NOT generate an article. Instead, return a short intro sentence (e.g., 'The topic <topic> may have several meanings, did you mean:'), then a numbered list (one per line, e.g., '1. topic (option1)'), and return the special code 45 as the reply code. If the topic is unambiguous, generate the article as before.
     """
     global USE_LOCAL_LLM
-    
+
     if USE_LOCAL_LLM:
         # Simplified prompt for local LLMs to avoid timeouts
         prompt = (
@@ -90,14 +88,16 @@ def generate_topic_content(topic):
             "Return the answer starting with a reply code (1 for accepted, 45 for ambiguous, 0 for error) on the first line, followed by the article text or the list of meanings."
         )
 
-    text = _call_llm([
-        {
-            "role": "system",
-            "content": "You are a knowledgeable encyclopedia writer.",
-        },
-        {"role": "user", "content": prompt},
-    ])
-    
+    text = _call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You are a knowledgeable encyclopedia writer.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+    )
+
     if text is None:
         return "0", "Error: Unable to generate content"
     logging.info(f"[OPENAI RAW GENERATION] Topic: {topic}\n{text}")
@@ -125,21 +125,28 @@ def validate_references(markdown_content):
     Only include references with a plausible URL. If no valid references, remove the References section entirely.
     """
     import re
+
     lines = markdown_content.splitlines()
     # Find the References section
     ref_start = None
     for i, line in enumerate(lines):
-        if line.strip().lower().startswith('## references') or line.strip().lower().startswith('# references'):
+        if line.strip().lower().startswith(
+            "## references"
+        ) or line.strip().lower().startswith("# references"):
             ref_start = i
             break
     if ref_start is None:
         # No references section, nothing to validate
-        return '\n'.join(lines)
+        return "\n".join(lines)
     # Collect all in-text citations [n]
-    intext_refs = set(re.findall(r'\[(\d+)\]', '\n'.join(lines[:ref_start])))
+    intext_refs = set(re.findall(r"\[(\d+)\]", "\n".join(lines[:ref_start])))
     # Collect all reference list items after the References header
-    ref_lines = lines[ref_start+1:]
-    ref_items = [re.match(r'- \[?(\d+)\]?[:：]?(.*)', l.strip()) for l in ref_lines if l.strip().startswith('-')]
+    ref_lines = lines[ref_start + 1 :]
+    ref_items = [
+        re.match(r"- \[?(\d+)\]?[:：]?(.*)", l.strip())
+        for l in ref_lines
+        if l.strip().startswith("-")
+    ]
     ref_nums = set(m.group(1) for m in ref_items if m)
     # Only keep references that have a plausible URL
     valid_refs = []
@@ -148,23 +155,23 @@ def validate_references(markdown_content):
             continue
         num, rest = m.group(1), m.group(2).strip()
         # Check for plausible URL in <...>
-        url_match = re.search(r'<(https?://[^>]+)>', rest)
+        url_match = re.search(r"<(https?://[^>]+)>", rest)
         if rest and url_match:
             valid_refs.append((num, rest))
     # Only keep references that are cited in-text
     valid_refs = [r for r in valid_refs if r[0] in intext_refs]
     # If no valid references, remove the References section
     if not valid_refs:
-        return '\n'.join(lines[:ref_start])
+        return "\n".join(lines[:ref_start])
     # Otherwise, reconstruct the References section
-    fixed_lines = lines[:ref_start+1]
+    fixed_lines = lines[: ref_start + 1]
     for num, rest in valid_refs:
-        fixed_lines.append(f'- [{num}]: {rest}')
+        fixed_lines.append(f"- [{num}]: {rest}")
     # Add any non-list lines after references
     for l in ref_lines:
-        if not l.strip().startswith('-'):
+        if not l.strip().startswith("-"):
             fixed_lines.append(l)
-    return '\n'.join(fixed_lines)
+    return "\n".join(fixed_lines)
 
 
 def update_topic_content(topic, current_content):
@@ -180,11 +187,16 @@ def update_topic_content(topic, current_content):
         "Return your response starting with a reply code (1 for updated, 0 for unchanged) on the first line, followed by the article text.\n\n"
         f"{current_content}"
     )
-    text = _call_llm([
-        {"role": "system", "content": "You are a knowledgeable encyclopedia updater."},
-        {"role": "user", "content": prompt},
-    ])
-    
+    text = _call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You are a knowledgeable encyclopedia updater.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+    )
+
     if text is None:
         return "0", current_content
     logging.info(f"[OPENAI RAW UPDATE] Topic: {topic}\n{text}")
@@ -201,28 +213,490 @@ def extract_topic_suggestions(article_text):
     Returns a list of strings.
     """
     prompt = (
-        "Analyze the following encyclopedia article and extract a list of words or phrases that would make good new article topics. "
-        "Return only a Python list of strings, sorted by relevance, with longer phrases before their subwords if both are present. "
-        "Do not include the main topic itself.\n\n"
-        f"{article_text}"
+        "Analyze the following encyclopedia article and extract a list of words or phrases that would make good new article topics.\n"
+        "CRITICAL REQUIREMENTS:\n"
+        "1. Extract ONLY complete, standalone phrases (1-4 words, maximum 30 characters)\n"
+        "2. Each phrase must be a valid encyclopedia article title\n"
+        "3. It could be Common phrases, Terms, Names, Dates, Nicknames etc....."
+        "4. Do NOT extract phrases that contain newlines, multiple spaces, or trailing text\n"
+        "5. Do NOT extract phrases that end with words like 'is', 'are', 'was', 'were', 'has', 'have', 'can', 'will', 'should'\n"
+        "6. Do NOT extract phrases that start with lowercase letters unless they are well-known technical terms\n"
+        "7. Focus on: proper nouns, technical terms, methodologies, concepts, tools, languages, frameworks\n"
+        "8. Examples of GOOD topics: 'Machine Learning', 'Guido van Rossum', 'Object-Oriented Programming', 'Data Science', 'Django', 'NumPy'\n"
+        "9. Examples of BAD topics: 'Python is', 'Overview\n\nPython is', 'Applications\n\nPython', 'Python continues to', 'Over the following'\n"
+        "10. Do not include the main topic itself\n"
+        "11. Return only a Python list of strings, sorted by relevance\n"
+        "Aim for minimum 9-15 high quality suggestions\n\n"
+        f"Article text:\n{article_text}"
     )
-    text = _call_llm([
-        {"role": "system", "content": "You are an assistant that extracts topic suggestions from encyclopedia articles."},
-        {"role": "user", "content": prompt},
-    ], max_tokens=300, temperature=0.3)
-    
+    text = _call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You are an assistant that extracts topic suggestions from encyclopedia articles. Be thorough and comprehensive in your extraction.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+    )
+
     if text is None:
         return []
-    
+
     # Try to safely evaluate the list from the LLM response
     import ast
+
     try:
         suggestions = ast.literal_eval(text)
         if not isinstance(suggestions, list):
             suggestions = []
     except Exception:
         suggestions = []
-    return suggestions
+
+    # Add pattern-based extraction as a fallback to ensure we don't miss important terms
+    pattern_suggestions = extract_topics_by_patterns(article_text)
+
+    # Combine and deduplicate suggestions, prioritizing LLM suggestions
+    all_suggestions = suggestions + pattern_suggestions
+    seen = set()
+    final_suggestions = []
+
+    # Clean up LLM suggestions before processing
+    cleaned_suggestions = []
+    for suggestion in suggestions:
+        if suggestion and isinstance(suggestion, str):
+            # Clean up the suggestion
+            cleaned = suggestion.strip()
+
+            # Remove suggestions with newlines or multiple spaces
+            if "\n" in cleaned or "\r" in cleaned or "  " in cleaned:
+                continue
+
+            # Remove any trailing incomplete words or phrases
+            if cleaned.endswith(
+                (
+                    "is",
+                    "are",
+                    "was",
+                    "were",
+                    "has",
+                    "have",
+                    "can",
+                    "will",
+                    "should",
+                    "allows",
+                    "emphasizes",
+                    "maintains",
+                    "replaces",
+                    "began",
+                    "surveys",
+                    "code",
+                    "development",
+                    "community",
+                    "employs",
+                    "professionals",
+                    "implementation",
+                    "enhancement",
+                    "conferences",
+                )
+            ):
+                continue
+
+            # Remove suggestions that start with incomplete words
+            if cleaned.lower().startswith(
+                (
+                    "indentation",
+                    "applications",
+                    "rossum",
+                    "python trends",
+                    "official",
+                    "the",
+                    "this",
+                    "that",
+                    "these",
+                    "those",
+                    "some",
+                    "many",
+                    "most",
+                    "all",
+                    "each",
+                    "every",
+                    "its",
+                    "libraries",
+                    "numerous",
+                )
+            ):
+                continue
+
+            # Remove suggestions that are clearly incomplete
+            if len(cleaned.split()) < 2 and not cleaned.isupper():
+                continue
+
+            # Remove suggestions that look like sentence fragments
+            if any(
+                cleaned.lower().endswith(word)
+                for word in [
+                    "replaces",
+                    "began",
+                    "surveys",
+                    "developing",
+                    "indentation",
+                    "extensively",
+                    "dominant",
+                ]
+            ):
+                continue
+
+            # Remove suggestions that contain problematic patterns
+            if any(
+                pattern in cleaned.lower()
+                for pattern in [
+                    "uses indentation",
+                    "steers the",
+                    "extensively in",
+                    "dominant in",
+                    "overview\n",
+                    "applications\n",
+                    "has undergone",
+                    "including procedural",
+                ]
+            ):
+                continue
+
+            # Remove suggestions that are clearly incomplete or problematic
+            if any(
+                cleaned.lower().startswith(word)
+                for word in [
+                    "including",
+                    "overview",
+                    "applications",
+                    "python has",
+                    "introduced",
+                    "code resembles",
+                    "its simplicity",
+                    "indentation indicates",
+                    "micropython allows",
+                    "rossum began",
+                    "key features",
+                ]
+            ):
+                continue
+
+            # Remove suggestions that end with incomplete words
+            if any(
+                cleaned.lower().endswith(word)
+                for word in [
+                    "comprehensions",
+                    "english",
+                    "makes",
+                    "code",
+                    "python",
+                    "developing",
+                    "include",
+                ]
+            ):
+                continue
+
+            cleaned_suggestions.append(cleaned)
+
+    # Add LLM suggestions first (they're higher quality) - but validate them too
+    for suggestion in cleaned_suggestions:
+        if suggestion.lower() not in seen and is_valid_topic_phrase(suggestion):
+            seen.add(suggestion.lower())
+            final_suggestions.append(suggestion)
+
+    # Add pattern suggestions that weren't already found
+    for suggestion in pattern_suggestions:
+        if suggestion.lower() not in seen and is_valid_topic_phrase(suggestion):
+            seen.add(suggestion.lower())
+            final_suggestions.append(suggestion)
+
+    return final_suggestions
+
+
+def extract_topics_by_patterns(article_text):
+    """
+    Extract potential topics using pattern matching as a fallback method.
+    This helps catch terms that the LLM might miss.
+    Only extracts short, meaningful phrases that could be encyclopedia topics.
+    """
+    import re
+
+    # Common patterns for potential topics - more restrictive to avoid long sentences
+    patterns = [
+        # Short proper nouns (1-3 words, max 30 characters) - must be complete phrases
+        r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b(?![a-z])",  # Don't match if followed by lowercase
+        # Technical terms with common suffixes (single words)
+        r"\b\w+(?:ology|ism|tion|sion|ment|ing|ed|al|ic|ical|ive|able|ible)\b",
+        # Acronyms and abbreviations (2-10 characters)
+        r"\b[A-Z]{2,10}\b",
+        # Quoted terms (short phrases only)
+        r'"([^"]{1,30})"',
+        # Terms in parentheses (short explanations only)
+        r"\(([^)]{1,30})\)",
+    ]
+
+    suggestions = []
+
+    for pattern in patterns:
+        matches = re.findall(pattern, article_text, re.IGNORECASE)
+        for match in matches:
+            # Clean up the match
+            if isinstance(match, tuple):
+                match = match[0] if match[0] else match[1]
+
+            match = match.strip()
+
+            # Apply strict filtering for topic quality
+            if is_valid_topic_phrase(match):
+                suggestions.append(match)
+
+    # Remove duplicates and sort by length (longer phrases first)
+    suggestions = list(set(suggestions))
+    suggestions.sort(key=len, reverse=True)
+
+    return suggestions[:10]  # Limit to top 10 pattern-based suggestions
+
+
+def is_valid_topic_phrase(phrase):
+    """
+    Check if a phrase is a valid encyclopedia topic.
+    Returns True if the phrase should be considered as a potential topic.
+    """
+    import re
+
+    # Basic length and content checks
+    if len(phrase) < 3 or len(phrase) > 50:
+        return False
+
+    # Must contain at least one letter
+    if not re.search(r"[a-zA-Z]", phrase):
+        return False
+
+    # Reject phrases with newlines or multiple spaces
+    if "\n" in phrase or "\r" in phrase or "  " in phrase:
+        return False
+
+    # Reject phrases that start or end with whitespace
+    if phrase != phrase.strip():
+        return False
+
+    # Reject if it's mostly common words
+    common_words = {
+        "the",
+        "and",
+        "or",
+        "but",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "are",
+        "was",
+        "were",
+        "been",
+        "have",
+        "has",
+        "had",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "must",
+        "shall",
+        "is",
+        "in",
+        "on",
+        "at",
+        "to",
+        "of",
+        "a",
+        "an",
+        "by",
+        "as",
+        "it",
+        "its",
+        "if",
+        "then",
+        "else",
+        "when",
+        "where",
+        "how",
+        "why",
+        "what",
+        "who",
+        "which",
+        "all",
+        "some",
+        "any",
+        "each",
+        "every",
+        "both",
+        "either",
+        "neither",
+        "not",
+        "no",
+        "yes",
+        "so",
+        "too",
+        "very",
+        "much",
+        "more",
+        "most",
+        "less",
+        "least",
+        "many",
+        "few",
+        "little",
+        "big",
+        "small",
+        "good",
+        "bad",
+        "new",
+        "old",
+        "first",
+        "last",
+        "next",
+        "previous",
+        "other",
+        "same",
+        "different",
+        "similar",
+        "various",
+        "several",
+        "multiple",
+        "single",
+        "double",
+        "triple",
+        "half",
+        "quarter",
+        "full",
+        "empty",
+        "complete",
+        "partial",
+        "often",
+        "due",
+        "described",
+        "language",
+    }
+
+    words = phrase.lower().split()
+    if len(words) > 1:
+        # For multi-word phrases, check if most words are common words
+        common_word_count = sum(1 for word in words if word in common_words)
+        if common_word_count > len(words) * 0.6:  # More than 60% common words
+            return False
+
+    # Reject if it's a complete sentence (contains sentence-ending punctuation)
+    if re.search(r"[.!?]$", phrase):
+        return False
+
+    # Reject if it contains too many common sentence connectors
+    sentence_connectors = {
+        "and",
+        "or",
+        "but",
+        "so",
+        "because",
+        "since",
+        "although",
+        "however",
+        "therefore",
+        "thus",
+        "hence",
+        "moreover",
+        "furthermore",
+    }
+    if any(connector in phrase.lower() for connector in sentence_connectors):
+        return False
+
+    # Reject if it looks like a sentence fragment (starts with lowercase and contains sentence connectors)
+    if phrase[0].islower() and len(phrase) > 15:
+        # Allow technical terms that start with lowercase but are valid topics
+        technical_terms = {
+            "functional programming",
+            "object-oriented programming",
+            "procedural programming",
+            "machine learning",
+            "data science",
+            "artificial intelligence",
+            "web development",
+            "software engineering",
+            "computer science",
+            "information technology",
+        }
+        if phrase.lower() not in technical_terms:
+            return False
+
+    # Reject phrases that end with incomplete words (common in sentence fragments)
+    incomplete_endings = [
+        "is",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "can",
+        "will",
+        "should",
+        "allows",
+        "emphasizes",
+        "maintains",
+        "provides",
+        "offers",
+        "includes",
+        "contains",
+        "supports",
+        "enables",
+    ]
+    if any(phrase.lower().endswith(ending) for ending in incomplete_endings):
+        return False
+
+    # Reject phrases that start with incomplete words (but allow version numbers and proper nouns)
+    incomplete_startings = [
+        "various",
+        "this",
+        "that",
+        "these",
+        "those",
+        "some",
+        "many",
+        "most",
+        "all",
+        "each",
+        "every",
+    ]
+    # Only reject if it starts with these words AND doesn't look like a proper noun or version
+    if any(phrase.lower().startswith(starting) for starting in incomplete_startings):
+        # Allow if it looks like a version number or proper noun
+        if not (
+            re.match(r"^[A-Z][a-z]+ \d+\.\d+", phrase)  # Like "Python 2.0"
+            or re.match(r"^[A-Z][a-z]+$", phrase)  # Single proper noun
+            or re.match(r"^[A-Z]{2,}$", phrase)
+        ):  # Acronym
+            return False
+
+    # Additional check: reject phrases that look like sentence fragments with verbs
+    sentence_fragment_patterns = [
+        r"^[A-Z][a-z]+ (is|are|was|were|has|have|can|will|should|allows|emphasizes|maintains|provides|offers|includes|contains|supports|enables)",
+        r"^[A-Z][a-z]+ (is|are|was|were|has|have|can|will|should|allows|emphasizes|maintains|provides|offers|includes|contains|supports|enables) [a-z]+$",
+    ]
+    for pattern in sentence_fragment_patterns:
+        if re.match(pattern, phrase, re.IGNORECASE):
+            return False
+
+    # Reject if it's just numbers or symbols
+    if re.match(
+        r"^[\d\s\-\+\(\)\.\,\:\;\!\?\/\[\]\{\}\'\"\&\*\%\$\@\^\=\~\|\<\>]+$", phrase
+    ):
+        return False
+
+    return True
 
 
 def generate_topic_suggestions_from_text(selected_text, current_topic=""):
@@ -251,22 +725,30 @@ def generate_topic_suggestions_from_text(selected_text, current_topic=""):
         f"- Text: 'programming language' → Extract: ['programming language'] (not 'computer programming')\n\n"
         f"Return exactly 3 terms in this format: ['Term 1', 'Term 2', 'Term 3']"
     )
-    
-    text = _call_llm([
-        {"role": "system", "content": "You are an assistant that extracts ONLY terms explicitly mentioned in text. Do NOT generate related concepts or interpretations."},
-        {"role": "user", "content": prompt},
-    ], max_tokens=200, temperature=0.1)
-    
+
+    text = _call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You are an assistant that extracts ONLY terms explicitly mentioned in text. Do NOT generate related concepts or interpretations.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+    )
+
     if text is None:
         return extract_terms_fallback(selected_text)
-    
+
     # Try to safely evaluate the list from the LLM response
     import ast
+
     try:
         suggestions = ast.literal_eval(text)
         if isinstance(suggestions, list) and len(suggestions) >= 3:
             # Validate that suggestions are actually from the text
-            validated_suggestions = validate_suggestions_against_text(suggestions, selected_text)
+            validated_suggestions = validate_suggestions_against_text(
+                suggestions, selected_text
+            )
             return validated_suggestions[:3]
         else:
             return extract_terms_fallback(selected_text)
@@ -279,41 +761,81 @@ def extract_terms_fallback(selected_text):
     Fallback method to extract terms from selected text using simple text analysis.
     """
     import re
-    
+
     # Clean the text
     text = selected_text.lower().strip()
-    
+
     # Common programming/tech terms to look for
     programming_terms = [
-        'programming', 'language', 'programming language', 'python', 'javascript', 'java', 'c++', 'c#', 'php',
-        'html', 'css', 'sql', 'database', 'algorithm', 'data structure', 'framework', 'library',
-        'api', 'web development', 'frontend', 'backend', 'full stack', 'mobile development',
-        'machine learning', 'artificial intelligence', 'ai', 'ml', 'deep learning', 'neural network',
-        'cloud computing', 'aws', 'azure', 'google cloud', 'docker', 'kubernetes', 'git',
-        'agile', 'scrum', 'devops', 'testing', 'unit test', 'integration test'
+        "programming",
+        "language",
+        "programming language",
+        "python",
+        "javascript",
+        "java",
+        "c++",
+        "c#",
+        "php",
+        "html",
+        "css",
+        "sql",
+        "database",
+        "algorithm",
+        "data structure",
+        "framework",
+        "library",
+        "api",
+        "web development",
+        "frontend",
+        "backend",
+        "full stack",
+        "mobile development",
+        "machine learning",
+        "artificial intelligence",
+        "ai",
+        "ml",
+        "deep learning",
+        "neural network",
+        "cloud computing",
+        "aws",
+        "azure",
+        "google cloud",
+        "docker",
+        "kubernetes",
+        "git",
+        "agile",
+        "scrum",
+        "devops",
+        "testing",
+        "unit test",
+        "integration test",
     ]
-    
+
     # Find terms that appear in the text
     found_terms = []
     for term in programming_terms:
         if term in text:
             found_terms.append(term)
-    
+
     # If we found terms, return them
     if found_terms:
         # Ensure we have exactly 3 terms
         while len(found_terms) < 3:
             found_terms.append(found_terms[0] if found_terms else "programming")
         return found_terms[:3]
-    
+
     # If no programming terms found, extract noun phrases
-    words = re.findall(r'\b\w+\b', text)
+    words = re.findall(r"\b\w+\b", text)
     if len(words) >= 3:
         return words[:3]
     elif len(words) > 0:
         return words + [words[0]] * (3 - len(words))
     else:
-        return ["No terms found", "Please try selecting different text", "Or enter your own topic"]
+        return [
+            "No terms found",
+            "Please try selecting different text",
+            "Or enter your own topic",
+        ]
 
 
 def validate_suggestions_against_text(suggestions, selected_text):
@@ -322,7 +844,7 @@ def validate_suggestions_against_text(suggestions, selected_text):
     """
     text_lower = selected_text.lower()
     validated = []
-    
+
     for suggestion in suggestions:
         if suggestion.lower() in text_lower:
             validated.append(suggestion)
@@ -336,36 +858,42 @@ def validate_suggestions_against_text(suggestions, selected_text):
             else:
                 # If no match found, use the original but mark it
                 validated.append(suggestion)
-    
+
     # Ensure we have exactly 3 suggestions
     while len(validated) < 3:
         validated.append("No additional terms found")
-    
+
     return validated[:3]
 
 
-def process_user_feedback(topic, current_content, feedback_type, feedback_details, sources):
+def process_user_feedback(
+    topic, current_content, feedback_type, feedback_details, sources
+):
     """
     Process user feedback (reports or additions) using the LLM.
     """
+
     # Filter out Wikipedia URLs from sources
     def filter_wikipedia_urls(sources):
         filtered_sources = []
         for source in sources:
             source_lower = source.strip().lower()
-            if 'wikipedia.org' not in source_lower and 'en.wikipedia.org' not in source_lower:
+            if (
+                "wikipedia.org" not in source_lower
+                and "en.wikipedia.org" not in source_lower
+            ):
                 filtered_sources.append(source.strip())
         return filtered_sources
-    
+
     # Check if any Wikipedia URLs were present
     original_sources = sources.copy()
     filtered_sources = filter_wikipedia_urls(sources)
     has_wikipedia = len(original_sources) != len(filtered_sources)
-    
+
     # If Wikipedia URLs were present, decline the request
     if has_wikipedia:
         return "0", current_content
-    
+
     if feedback_type == "report":
         prompt = (
             f"The following encyclopedia article might contain errors:\n\n"
@@ -389,14 +917,16 @@ def process_user_feedback(topic, current_content, feedback_type, feedback_detail
     else:
         return "0", current_content
 
-    text = _call_llm([
-        {
-            "role": "system",
-            "content": "You are a helpful assistant for editing encyclopedia articles.",
-        },
-        {"role": "user", "content": prompt},
-    ])
-    
+    text = _call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant for editing encyclopedia articles.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+    )
+
     if text is None:
         return "0", current_content
     try:
@@ -404,7 +934,7 @@ def process_user_feedback(topic, current_content, feedback_type, feedback_detail
     except ValueError:
         reply_code, updated_content = "0", current_content
 
-    return reply_code, updated_content 
+    return reply_code, updated_content
 
 
 def validate_topic_name_with_llm(topic_name):
@@ -421,20 +951,26 @@ def validate_topic_name_with_llm(topic_name):
         f"\nInput: {topic_name}\n"
         "Reply format:\nVALID\n--or--\nINVALID\n<reason>\n- suggestion 1\n- suggestion 2\n...\n"
     )
-    text = _call_llm([
-        {"role": "system", "content": "You are an expert encyclopedia editor."},
-        {"role": "user", "content": prompt},
-    ], max_tokens=200, temperature=0.2)
+    text = _call_llm(
+        [
+            {"role": "system", "content": "You are an expert encyclopedia editor."},
+            {"role": "user", "content": prompt},
+        ],
+    )
     if text is None:
         return False, ["Error: Unable to validate topic name."]
     lines = text.strip().splitlines()
     if not lines:
         return False, ["Error: No response from LLM."]
-    if lines[0].strip().upper() == 'VALID':
+    if lines[0].strip().upper() == "VALID":
         return True, None
-    elif lines[0].strip().upper() == 'INVALID':
+    elif lines[0].strip().upper() == "INVALID":
         reason = lines[1] if len(lines) > 1 else "Not a valid article name."
-        suggestions = [l.lstrip('-').strip() for l in lines[2:] if l.strip().startswith('-') or l.strip()]
+        suggestions = [
+            l.lstrip("-").strip()
+            for l in lines[2:]
+            if l.strip().startswith("-") or l.strip()
+        ]
         return False, (reason, suggestions)
     else:
-        return False, ["Unrecognized response from LLM:", text] 
+        return False, ["Unrecognized response from LLM:", text]

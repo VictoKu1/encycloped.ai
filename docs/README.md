@@ -14,6 +14,17 @@ Complete API reference with endpoints, request/response examples, and error hand
 - Rate limiting and security
 - Response codes and error handling
 
+### 🍔 [Hamburger Menu Documentation](HAMBURGER_MENU.md)
+Complete guide to the hamburger menu feature and recent topics navigation.
+
+**Key Topics:**
+- User interface and interactions
+- Local storage implementation
+- JavaScript functionality
+- CSS styling and animations
+- Accessibility features
+- Troubleshooting guide
+
 ### 🏗️ [Architecture Documentation](ARCHITECTURE.md)
 Detailed system architecture, component relationships, and technical design.
 
@@ -71,6 +82,7 @@ encycloped.ai/
 ├── docs/                    # Documentation
 │   ├── API.md              # API reference
 │   ├── ARCHITECTURE.md     # System architecture
+│   ├── HAMBURGER_MENU.md   # Hamburger menu documentation
 │   ├── SETUP.md            # Setup instructions
 │   ├── CONTRIBUTING.md     # Contributing guidelines
 │   └── README.md           # This file
@@ -104,6 +116,7 @@ encycloped.ai/
 - User feedback integration
 - Cross-reference linking
 - Responsive web interface
+- Recent topics navigation (hamburger menu)
 
 ### 💾 Persistent Storage
 - PostgreSQL database for articles
@@ -160,6 +173,7 @@ Open your browser and navigate to `http://localhost:5000`
 - Select text to generate topic suggestions
 - Use feedback forms to improve articles
 - Explore the interconnected topic network
+- Access recently viewed topics via the hamburger menu
 
 ## Support and Community
 
@@ -184,6 +198,7 @@ This project is licensed under the [GNU General Public License v3 (GPL v3)](../L
 - Improved local LLM support
 - Enhanced security features
 - Better error handling and validation
+- Added hamburger menu with recent topics navigation
 
 ### Upcoming Features
 - User authentication system

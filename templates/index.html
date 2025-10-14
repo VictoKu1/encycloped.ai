@@ -7,16 +7,41 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        document.querySelector('.currentYear').textContent = new Date().getFullYear();
-      });
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelector('.currentYear').textContent = new Date().getFullYear()
+      })
     </script>
   </head>
   <body>
+    <!-- Sidebar for Recent Topics -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3>Recent Topics</h3>
+        <button id="close-sidebar" class="close-sidebar">&times;</button>
+      </div>
+      <div class="sidebar-content">
+        <div id="recent-topics-list" class="recent-topics-list">
+          <p class="no-topics">No recent topics yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay for sidebar -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     <div class="main-container">
       <header>
-        <h1>encycloped.ai</h1>
-        <p class="subtitle">AI Moderated Encyclopedia</p>
+        <div class="header-left">
+          <button id="hamburger-menu" class="hamburger-menu" title="Recent Topics">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
+        <div class="header-center">
+          <h1>encycloped.ai</h1>
+          <p class="subtitle">AI Moderated Encyclopedia</p>
+        </div>
       </header>
       <div class="search-box">
         <form method="POST" action="/">
