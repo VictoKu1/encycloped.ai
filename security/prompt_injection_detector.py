@@ -9,8 +9,10 @@ import logging
 
 # Patterns that might indicate prompt injection attempts
 SUSPICIOUS_PATTERNS = [
-    # Direct instruction patterns
-    r"(?i)(ignore|disregard|forget|override)\s+(previous|all|above|prior)\s+(instructions?|prompts?|rules?|commands?)",
+    # Direct instruction patterns - more flexible ordering
+    r"(?i)ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?|commands?)",
+    r"(?i)ignore\s+(previous|all|above|prior)\s+(instructions?|prompts?|rules?|commands?)",
+    r"(?i)(disregard|forget|override)\s+(previous|all|above|prior)\s+(instructions?|prompts?|rules?|commands?)",
     r"(?i)^(you\s+are|you're|act\s+as|pretend\s+to\s+be|roleplay|imagine\s+you\s+are)",
     r"(?i)(new\s+instructions?|updated\s+instructions?|system\s+prompt)",
     r"(?i)(do\s+not|don't|never)\s+(follow|obey|listen\s+to)\s+(instructions?|rules?|guidelines?)",
@@ -60,8 +62,8 @@ def detect_prompt_injection(user_input: str, threshold: float = 0.5) -> tuple[bo
     for pattern in SUSPICIOUS_PATTERNS:
         if re.search(pattern, user_input):
             matched_patterns.append(pattern)
-            # Each match increases suspicion
-            suspicion_score += 0.2
+            # Each match increases suspicion significantly
+            suspicion_score += 0.35  # Increased from 0.2 to make single matches more significant
     
     # Additional heuristics
     
@@ -159,7 +161,7 @@ def validate_user_feedback(feedback_text: str, sources: list) -> tuple[bool, str
         return False, "Feedback must be 2000 characters or less."
     
     # Check for prompt injection
-    is_suspicious, score, patterns = detect_prompt_injection(feedback_text, threshold=0.5)
+    is_suspicious, score, patterns = detect_prompt_injection(feedback_text, threshold=0.3)
     if is_suspicious:
         logging.warning(
             f"Rejected suspicious feedback - score: {score:.2f}, "
