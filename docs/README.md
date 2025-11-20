@@ -14,6 +14,17 @@ Complete API reference with endpoints, request/response examples, and error hand
 - Rate limiting and security
 - Response codes and error handling
 
+### 🔒 [Security Documentation](SECURITY.md)
+Comprehensive security features, threat mitigation, and best practices.
+
+**Key Topics:**
+- Prompt injection protection
+- XSS and injection prevention
+- DoS protection and rate limiting
+- Content poisoning prevention
+- Review queue and admin tools
+- Security best practices
+
 ### 🍔 [Hamburger Menu Documentation](HAMBURGER_MENU.md)
 Complete guide to the hamburger menu feature and recent topics navigation.
 
@@ -67,11 +78,13 @@ Guidelines for contributors, including code style, testing, and pull request pro
 
 ### For Developers
 - [Architecture Documentation](ARCHITECTURE.md) - Understand the system
+- [Security Documentation](SECURITY.md) - Security implementation details
 - [Contributing Guidelines](CONTRIBUTING.md) - Contribute to the project
 - [Setup Guide](SETUP.md) - Development environment
 
 ### For System Administrators
 - [Architecture Documentation](ARCHITECTURE.md) - System design
+- [Security Documentation](SECURITY.md) - Security features and incident response
 - [Setup Guide](SETUP.md) - Production deployment
 - [API Documentation](API.md) - API monitoring
 
