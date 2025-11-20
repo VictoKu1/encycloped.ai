@@ -47,14 +47,6 @@ While Wikipedia has been a valuable resource, human moderated encyclopedias like
 
 ## Security Features
 
-encycloped.ai implements comprehensive security measures to protect against web vulnerabilities and AI-specific attacks. For detailed information, see [Security Documentation](docs/SECURITY.md).
-
-- **Prompt Injection Protection:**
-  - Input delimiter wrapping with `"""` quotes
-  - Clear framing to prevent instruction execution
-  - Heuristic-based detection with pattern matching
-  - LLM system prompt hardening
-
 - **Cross-Site Scripting (XSS) Protection:**
   - HTML sanitization using `bleach`
   - Strict tag and attribute whitelisting
@@ -64,12 +56,6 @@ encycloped.ai implements comprehensive security measures to protect against web 
   - IP-based rate limiting (5 requests per minute for sensitive endpoints)
   - Request throttling per session
   - Input size restrictions
-
-- **Content Poisoning Prevention:**
-  - Submission review queue with automated flagging
-  - Duplicate content detection
-  - Frequency-based abuse detection
-  - Admin review workflow
 
 - **Content Security:**
   - Markdown sanitization
@@ -82,8 +68,6 @@ encycloped.ai implements comprehensive security measures to protect against web 
   - Required field checking
   - Error handling and logging
   - Secure session management
-
-For security best practices, incident response procedures, and threat modeling, see [docs/SECURITY.md](docs/SECURITY.md).
 
 
 - **Flask App**: Handles all web requests, user feedback, and article generation.

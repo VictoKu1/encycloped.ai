@@ -29,11 +29,6 @@ from security.validators import (
     log_contribution,
     validate_json_payload
 )
-from security.prompt_injection_detector import (
-    validate_user_feedback,
-    sanitize_for_llm_input
-)
-from security.review_queue import get_review_queue
 from content.markdown_processor import (
     convert_markdown, 
     remove_duplicate_header, 
@@ -272,33 +267,11 @@ def report_issue():
         validate_json_payload(data, ["topic", "report_details", "sources"])
 
         topic = validate_topic_slug(data["topic"])
-        report_details_raw = data["report_details"]
-        sources_raw = data["sources"]
-        
-        # Validate user feedback for prompt injection before processing
-        is_valid, error_msg = validate_user_feedback(report_details_raw, sources_raw)
-        if not is_valid:
-            logging.warning(f"Rejected report for topic '{topic}': {error_msg}")
-            return jsonify({"error": error_msg}), 400
-        
-        # Sanitize inputs after validation
-        report_details = sanitize_for_llm_input(sanitize_text(report_details_raw))
-        sources = sanitize_urls(sources_raw)
+        report_details = sanitize_text(data["report_details"])
+        sources = sanitize_urls(data["sources"])
 
         if not topic_exists(topic):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
-
-        # Add submission to review queue for tracking and abuse detection
-        review_queue = get_review_queue()
-        submission = review_queue.add_submission(
-            ip_address=request.remote_addr,
-            user_id=request.headers.get('X-User-ID', 'anonymous'),
-            action='report',
-            topic=topic,
-            content=report_details,
-            sources=sources,
-            auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
-        )
 
         # Log the contribution
         log_contribution(
@@ -306,19 +279,8 @@ def report_issue():
             request.headers.get('X-User-ID', 'anonymous'),
             'report',
             topic,
-            report_details[:100]  # Log only first 100 chars
+            report_details
         )
-        
-        # Check if submission should be queued for review
-        if review_queue.should_require_review(submission):
-            logging.info(
-                f"Submission {submission['id']} flagged for review: {submission['flags']}"
-            )
-            return jsonify({
-                "reply": "queued",
-                "message": "Your submission has been queued for review due to automated safety checks.",
-                "submission_id": submission['id']
-            }), 202
 
         topic_data = get_topic_data(topic)
         current_content = topic_data["content"] if topic_data else ""
@@ -358,33 +320,11 @@ def add_information():
 
         topic = validate_topic_slug(data["topic"])
         subtopic = validate_topic_slug(data["subtopic"])
-        info_raw = data["info"]
-        sources_raw = data["sources"]
-        
-        # Validate user feedback for prompt injection before processing
-        is_valid, error_msg = validate_user_feedback(info_raw, sources_raw)
-        if not is_valid:
-            logging.warning(f"Rejected add_info for topic '{topic}': {error_msg}")
-            return jsonify({"error": error_msg}), 400
-        
-        # Sanitize inputs after validation
-        info = sanitize_for_llm_input(sanitize_text(info_raw))
-        sources = sanitize_urls(sources_raw)
+        info = sanitize_text(data["info"])
+        sources = sanitize_urls(data["sources"])
 
         if not topic_exists(topic):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
-
-        # Add submission to review queue for tracking and abuse detection
-        review_queue = get_review_queue()
-        submission = review_queue.add_submission(
-            ip_address=request.remote_addr,
-            user_id=request.headers.get('X-User-ID', 'anonymous'),
-            action='add_info',
-            topic=topic,
-            content=info,
-            sources=sources,
-            auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
-        )
 
         # Log the contribution
         log_contribution(
@@ -394,17 +334,6 @@ def add_information():
             topic,
             f"Added info to subtopic: {subtopic}"
         )
-        
-        # Check if submission should be queued for review
-        if review_queue.should_require_review(submission):
-            logging.info(
-                f"Submission {submission['id']} flagged for review: {submission['flags']}"
-            )
-            return jsonify({
-                "reply": "queued",
-                "message": "Your submission has been queued for review due to automated safety checks.",
-                "submission_id": submission['id']
-            }), 202
 
         topic_data = get_topic_data(topic)
         current_content = topic_data["content"] if topic_data else ""
@@ -504,79 +433,6 @@ def add_reference():
     except Exception as e:
         import traceback
         logging.error(f"Error in add_reference: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/admin/review_queue", methods=["GET"])
-def admin_review_queue():
-    """
-    Admin endpoint to view pending submissions in the review queue.
-    This endpoint is for future implementation of human approval workflow.
-    
-    TODO: Add authentication/authorization before deploying to production.
-    """
-    try:
-        review_queue = get_review_queue()
-        
-        # Get pending submissions
-        pending = review_queue.get_pending_submissions()
-        
-        # Get statistics
-        stats = review_queue.get_submission_stats()
-        
-        return jsonify({
-            "statistics": stats,
-            "pending_submissions": pending
-        })
-    except Exception as e:
-        logging.error(f"Error in admin_review_queue: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/admin/review_action", methods=["POST"])
-def admin_review_action():
-    """
-    Admin endpoint to approve or reject a submission.
-    
-    Expected JSON payload:
-    {
-        "submission_id": "abc123",
-        "action": "approve" or "reject",
-        "reason": "optional rejection reason"
-    }
-    
-    TODO: Add authentication/authorization before deploying to production.
-    """
-    try:
-        data = request.get_json()
-        validate_json_payload(data, ["submission_id", "action"])
-        
-        submission_id = data["submission_id"]
-        action = data["action"]
-        
-        review_queue = get_review_queue()
-        
-        if action == "approve":
-            success = review_queue.approve_submission(submission_id)
-            if success:
-                return jsonify({"status": "approved", "submission_id": submission_id})
-            else:
-                return jsonify({"error": "Submission not found"}), 404
-                
-        elif action == "reject":
-            reason = data.get("reason", "")
-            success = review_queue.reject_submission(submission_id, reason)
-            if success:
-                return jsonify({"status": "rejected", "submission_id": submission_id})
-            else:
-                return jsonify({"error": "Submission not found"}), 404
-        else:
-            return jsonify({"error": "Invalid action. Use 'approve' or 'reject'"}), 400
-            
-    except BadRequest as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        logging.error(f"Error in admin_review_action: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 
