@@ -496,6 +496,7 @@ def suggest_topics():
 
 
 @app.route("/add_reference", methods=["POST"])
+@limiter.limit("5 per minute")
 def add_reference():
     """
     Add a new reference (hyperlink) to the article's markdown and persist it.
@@ -511,7 +512,7 @@ def add_reference():
         validate_json_payload(data, ["article_topic", "selected_text", "reference_topic"])
         article_topic = validate_topic_slug(data["article_topic"])
         selected_text = sanitize_text(data["selected_text"])
-        reference_topic = sanitize_text(data["reference_topic"])
+        reference_topic = validate_topic_slug(data["reference_topic"])
         if not selected_text.strip() or not reference_topic.strip():
             return jsonify({"error": "selected_text and reference_topic must be non-empty."}), 400
         topic_key = article_topic.lower()
@@ -519,6 +520,8 @@ def add_reference():
         if not topic_data:
             return jsonify({"error": "Topic not found."}), 404
         markdown_content = topic_data.get("markdown", "")
+        if selected_text not in markdown_content:
+            return jsonify({"error": "selected_text not found in article content."}), 400
         topic_suggestions = topic_data.get("topic_suggestions", [])
         # Add the new reference topic to topic_suggestions if not present
         if reference_topic not in topic_suggestions:
@@ -528,7 +531,9 @@ def add_reference():
         def replace_first(text, sub, repl):
             pattern = re.escape(sub)
             return re.sub(pattern, repl, text, count=1)
-        link_md = f"[{selected_text}](/" + reference_topic.replace(" ", "%20") + ")"
+        from urllib.parse import quote
+        encoded_reference_topic = quote(reference_topic, safe="")
+        link_md = f"[{selected_text}](/" + encoded_reference_topic + ")"
         new_markdown = replace_first(markdown_content, selected_text, link_md)
         # Save the updated markdown and topic suggestions
         from content.markdown_processor import linkify_topics, convert_markdown, remove_duplicate_header
