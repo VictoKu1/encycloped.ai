@@ -306,6 +306,7 @@ def report_issue():
         validate_json_payload(data, ["topic", "report_details", "sources"])
 
         topic = validate_topic_slug(data["topic"])
+        topic_key = topic.lower()
         report_details_raw = data["report_details"]
         sources_raw = data["sources"]
         
@@ -319,7 +320,7 @@ def report_issue():
         report_details = sanitize_for_llm_input(sanitize_text(report_details_raw))
         sources = sanitize_urls(sources_raw)
 
-        if not topic_exists(topic):
+        if not topic_exists(topic_key):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Add submission to review queue for tracking and abuse detection
@@ -328,7 +329,7 @@ def report_issue():
             ip_address=request.remote_addr,
             user_id=request.headers.get('X-User-ID', 'anonymous'),
             action='report',
-            topic=topic,
+            topic=topic_key,
             content=report_details,
             sources=sources,
             auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
@@ -339,7 +340,7 @@ def report_issue():
             request.remote_addr,
             request.headers.get('X-User-ID', 'anonymous'),
             'report',
-            topic,
+            topic_key,
             report_details[:100]  # Log only first 100 chars
         )
         
@@ -354,7 +355,7 @@ def report_issue():
                 "submission_id": submission['id']
             }), 202
 
-        topic_data = get_topic_data(topic)
+        topic_data = get_topic_data(topic_key)
         current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
             topic, current_content, "report", report_details, sources
@@ -362,7 +363,7 @@ def report_issue():
 
         updated_content = convert_markdown(updated_content)
         if reply_code.strip() == "1":
-            update_store_content(topic, updated_content.strip())
+            update_store_content(topic_key, updated_content.strip())
 
         return jsonify(
             {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
@@ -391,6 +392,7 @@ def add_information():
         validate_json_payload(data, ["topic", "subtopic", "info", "sources"])
 
         topic = validate_topic_slug(data["topic"])
+        topic_key = topic.lower()
         subtopic = validate_topic_slug(data["subtopic"])
         info_raw = data["info"]
         sources_raw = data["sources"]
@@ -405,7 +407,7 @@ def add_information():
         info = sanitize_for_llm_input(sanitize_text(info_raw))
         sources = sanitize_urls(sources_raw)
 
-        if not topic_exists(topic):
+        if not topic_exists(topic_key):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Add submission to review queue for tracking and abuse detection
@@ -414,7 +416,7 @@ def add_information():
             ip_address=request.remote_addr,
             user_id=request.headers.get('X-User-ID', 'anonymous'),
             action='add_info',
-            topic=topic,
+            topic=topic_key,
             content=info,
             sources=sources,
             auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
@@ -425,7 +427,7 @@ def add_information():
             request.remote_addr,
             request.headers.get('X-User-ID', 'anonymous'),
             'add_info',
-            topic,
+            topic_key,
             f"Added info to subtopic: {subtopic}"
         )
         
@@ -440,7 +442,7 @@ def add_information():
                 "submission_id": submission['id']
             }), 202
 
-        topic_data = get_topic_data(topic)
+        topic_data = get_topic_data(topic_key)
         current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
             topic, current_content, "add_info", info, sources
@@ -448,7 +450,7 @@ def add_information():
 
         updated_content = convert_markdown(updated_content)
         if reply_code.strip() == "1":
-            update_store_content(topic, updated_content.strip())
+            update_store_content(topic_key, updated_content.strip())
             # Optionally, update subtopics in the database if needed
 
         return jsonify(
@@ -510,6 +512,8 @@ def add_reference():
         article_topic = validate_topic_slug(data["article_topic"])
         selected_text = sanitize_text(data["selected_text"])
         reference_topic = sanitize_text(data["reference_topic"])
+        if not selected_text.strip() or not reference_topic.strip():
+            return jsonify({"error": "selected_text and reference_topic must be non-empty."}), 400
         topic_key = article_topic.lower()
         topic_data = get_topic_data(topic_key)
         if not topic_data:

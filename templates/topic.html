@@ -7,7 +7,10 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script>
-      document.querySelector('.currentYear').textContent = new Date().getFullYear()
+      document.addEventListener('DOMContentLoaded', function () {
+        const yearEl = document.querySelector('.currentYear')
+        if (yearEl) yearEl.textContent = new Date().getFullYear()
+      })
     </script>
   </head>
   <body>
@@ -95,6 +98,7 @@
         <div class="modal-content">
           <span id="close-add-info" class="close">&times;</span>
           <h2>Add Missing Information</h2>
+          <input id="subtopic-name" type="text" placeholder="Subtopic (optional, defaults to General)" />
           <textarea id="additional-info" placeholder="Add information..."></textarea>
           <input id="info-sources" type="text" placeholder="Sources (comma-separated)" />
           <button id="send-add-info">Submit</button>
