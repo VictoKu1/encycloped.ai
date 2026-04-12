@@ -7,11 +7,15 @@ import os
 import sys
 import logging
 from datetime import datetime
+from hmac import compare_digest
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.exceptions import BadRequest
 import hashlib
+
+# Truthy values for enabling Flask debug mode from environment.
+DEBUG_TRUE_VALUES = ("1", "true", "yes", "on")
 
 # Import from our modular packages
 from agents.topic_generator import (
@@ -71,6 +75,36 @@ limiter = Limiter(
 )
 
 db.init_db()  # Initialize the database schema at startup
+
+
+def _is_authorized_admin_request():
+    """Validate admin token from request headers."""
+    configured_token = os.environ.get("ADMIN_API_TOKEN", "")
+    if not configured_token:
+        logging.warning("Admin endpoint access denied: ADMIN_API_TOKEN is not configured.")
+        return False
+
+    token = request.headers.get("X-Admin-Token", "").strip()
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1].strip()
+    if not token:
+        logging.warning("Admin endpoint access denied: no admin token provided.")
+        return False
+
+    try:
+        token_matches = compare_digest(
+            token.encode("utf-8"), configured_token.encode("utf-8")
+        )
+    except UnicodeEncodeError:
+        logging.warning("Admin endpoint access denied: invalid admin token encoding.")
+        return False
+    if not token_matches:
+        logging.warning("Admin endpoint access denied: invalid admin token.")
+        return False
+    return True
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -511,11 +545,12 @@ def add_reference():
 def admin_review_queue():
     """
     Admin endpoint to view pending submissions in the review queue.
-    This endpoint is for future implementation of human approval workflow.
-    
-    TODO: Add authentication/authorization before deploying to production.
+    This endpoint requires admin token authentication.
     """
     try:
+        if not _is_authorized_admin_request():
+            return jsonify({"error": "Unauthorized"}), 401
+
         review_queue = get_review_queue()
         
         # Get pending submissions
@@ -545,9 +580,12 @@ def admin_review_action():
         "reason": "optional rejection reason"
     }
     
-    TODO: Add authentication/authorization before deploying to production.
+    This endpoint requires admin token authentication.
     """
     try:
+        if not _is_authorized_admin_request():
+            return jsonify({"error": "Unauthorized"}), 401
+
         data = request.get_json()
         validate_json_payload(data, ["submission_id", "action"])
         
@@ -607,4 +645,5 @@ if __name__ == "__main__":
         print("✅ OpenAI API mode activated")
     
     print("🚀 Starting Flask application...")
-    app.run(debug=True, use_reloader=False)
+    debug_mode = os.environ.get("FLASK_DEBUG", "").strip().lower() in DEBUG_TRUE_VALUES
+    app.run(debug=debug_mode, use_reloader=False)
