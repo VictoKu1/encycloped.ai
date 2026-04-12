@@ -510,9 +510,14 @@ def add_reference():
     try:
         data = request.get_json()
         validate_json_payload(data, ["article_topic", "selected_text", "reference_topic"])
-        article_topic = validate_topic_slug(data["article_topic"])
-        selected_text = sanitize_text(data["selected_text"])
-        reference_topic = validate_topic_slug(data["reference_topic"])
+        article_topic = validate_topic_slug(data["article_topic"].strip())
+        reference_topic = validate_topic_slug(data["reference_topic"].strip())
+        selected_text = data["selected_text"]
+        if not isinstance(selected_text, str):
+            raise BadRequest("selected_text must be a string.")
+        selected_text = selected_text.strip()
+        if any(ch in selected_text for ch in "\r\n[]"):
+            return jsonify({"error": "selected_text contains unsupported characters."}), 400
         if not selected_text.strip() or not reference_topic.strip():
             return jsonify({"error": "selected_text and reference_topic must be non-empty."}), 400
         topic_key = article_topic.lower()
