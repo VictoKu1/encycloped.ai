@@ -181,7 +181,7 @@ $(document).ready(function () {
 
     // Handle report submission
     $("#send-report").click(function () {
-        let topic = "{{ topic }}";
+        let topic = getCurrentTopic();
         let report_details = $("#report-details").val();
         let sources = $("#report-sources").val().split(',').map(s => s.trim()).filter(s => s.length > 0);
 
@@ -231,8 +231,11 @@ $(document).ready(function () {
 
     // Handle add info submission
     $("#send-add-info").click(function () {
-        let topic = "{{ topic }}";
-        let subtopic = $("#subtopic-name").val();
+        let topic = getCurrentTopic();
+        let subtopic = ($("#subtopic-name").val() || "").trim();
+        if (!subtopic) {
+            subtopic = "General";
+        }
         let info = $("#additional-info").val();
         let sources = $("#info-sources").val().split(',').map(s => s.trim()).filter(s => s.length > 0);
 
@@ -589,7 +592,7 @@ $(document).ready(function () {
     // Function to save the topic link to backend (now implemented)
     function saveTopicLinkToBackend(selectedText, topic) {
         // Get the current article topic from the page (assume it's in a header or variable)
-        let articleTopic = $(".page-topic-header h1").text().trim() || currentTopic;
+        let articleTopic = $(".page-topic-header h1").text().trim() || currentTopicForSelection || getCurrentTopic();
         $.ajax({
             url: '/add_reference',
             method: 'POST',
@@ -705,8 +708,6 @@ $(document).ready(function () {
         $('head').append('<style id="modal-blur-style">.modal-blur { filter: blur(4px) !important; transition: filter 0.2s; }</style>');
     }
 });
-
-
 
 
 

@@ -7,11 +7,15 @@ import os
 import sys
 import logging
 from datetime import datetime
+from hmac import compare_digest
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.exceptions import BadRequest
 import hashlib
+
+# Truthy values for enabling Flask debug mode from environment.
+DEBUG_TRUE_VALUES = ("1", "true", "yes", "on")
 
 # Import from our modular packages
 from agents.topic_generator import (
@@ -71,6 +75,36 @@ limiter = Limiter(
 )
 
 db.init_db()  # Initialize the database schema at startup
+
+
+def _is_authorized_admin_request():
+    """Validate admin token from request headers."""
+    configured_token = os.environ.get("ADMIN_API_TOKEN", "")
+    if not configured_token:
+        logging.warning("Admin endpoint access denied: ADMIN_API_TOKEN is not configured.")
+        return False
+
+    token = request.headers.get("X-Admin-Token", "").strip()
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1].strip()
+    if not token:
+        logging.warning("Admin endpoint access denied: no admin token provided.")
+        return False
+
+    try:
+        token_matches = compare_digest(
+            token.encode("utf-8"), configured_token.encode("utf-8")
+        )
+    except UnicodeEncodeError:
+        logging.warning("Admin endpoint access denied: invalid admin token encoding.")
+        return False
+    if not token_matches:
+        logging.warning("Admin endpoint access denied: invalid admin token.")
+        return False
+    return True
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -272,6 +306,7 @@ def report_issue():
         validate_json_payload(data, ["topic", "report_details", "sources"])
 
         topic = validate_topic_slug(data["topic"])
+        topic_key = topic.lower()
         report_details_raw = data["report_details"]
         sources_raw = data["sources"]
         
@@ -285,7 +320,7 @@ def report_issue():
         report_details = sanitize_for_llm_input(sanitize_text(report_details_raw))
         sources = sanitize_urls(sources_raw)
 
-        if not topic_exists(topic):
+        if not topic_exists(topic_key):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Add submission to review queue for tracking and abuse detection
@@ -294,7 +329,7 @@ def report_issue():
             ip_address=request.remote_addr,
             user_id=request.headers.get('X-User-ID', 'anonymous'),
             action='report',
-            topic=topic,
+            topic=topic_key,
             content=report_details,
             sources=sources,
             auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
@@ -305,7 +340,7 @@ def report_issue():
             request.remote_addr,
             request.headers.get('X-User-ID', 'anonymous'),
             'report',
-            topic,
+            topic_key,
             report_details[:100]  # Log only first 100 chars
         )
         
@@ -320,7 +355,7 @@ def report_issue():
                 "submission_id": submission['id']
             }), 202
 
-        topic_data = get_topic_data(topic)
+        topic_data = get_topic_data(topic_key)
         current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
             topic, current_content, "report", report_details, sources
@@ -328,7 +363,7 @@ def report_issue():
 
         updated_content = convert_markdown(updated_content)
         if reply_code.strip() == "1":
-            update_store_content(topic, updated_content.strip())
+            update_store_content(topic_key, updated_content.strip())
 
         return jsonify(
             {"reply": reply_code.strip(), "updated_content": updated_content.strip()}
@@ -357,6 +392,7 @@ def add_information():
         validate_json_payload(data, ["topic", "subtopic", "info", "sources"])
 
         topic = validate_topic_slug(data["topic"])
+        topic_key = topic.lower()
         subtopic = validate_topic_slug(data["subtopic"])
         info_raw = data["info"]
         sources_raw = data["sources"]
@@ -371,7 +407,7 @@ def add_information():
         info = sanitize_for_llm_input(sanitize_text(info_raw))
         sources = sanitize_urls(sources_raw)
 
-        if not topic_exists(topic):
+        if not topic_exists(topic_key):
             return jsonify({"reply": "0", "message": "Topic not found."}), 404
 
         # Add submission to review queue for tracking and abuse detection
@@ -380,7 +416,7 @@ def add_information():
             ip_address=request.remote_addr,
             user_id=request.headers.get('X-User-ID', 'anonymous'),
             action='add_info',
-            topic=topic,
+            topic=topic_key,
             content=info,
             sources=sources,
             auto_approve=True  # Auto-approve for now, can be changed to False for stricter control
@@ -391,7 +427,7 @@ def add_information():
             request.remote_addr,
             request.headers.get('X-User-ID', 'anonymous'),
             'add_info',
-            topic,
+            topic_key,
             f"Added info to subtopic: {subtopic}"
         )
         
@@ -406,7 +442,7 @@ def add_information():
                 "submission_id": submission['id']
             }), 202
 
-        topic_data = get_topic_data(topic)
+        topic_data = get_topic_data(topic_key)
         current_content = topic_data["content"] if topic_data else ""
         reply_code, updated_content = process_user_feedback(
             topic, current_content, "add_info", info, sources
@@ -414,7 +450,7 @@ def add_information():
 
         updated_content = convert_markdown(updated_content)
         if reply_code.strip() == "1":
-            update_store_content(topic, updated_content.strip())
+            update_store_content(topic_key, updated_content.strip())
             # Optionally, update subtopics in the database if needed
 
         return jsonify(
@@ -460,6 +496,7 @@ def suggest_topics():
 
 
 @app.route("/add_reference", methods=["POST"])
+@limiter.limit("5 per minute")
 def add_reference():
     """
     Add a new reference (hyperlink) to the article's markdown and persist it.
@@ -473,14 +510,23 @@ def add_reference():
     try:
         data = request.get_json()
         validate_json_payload(data, ["article_topic", "selected_text", "reference_topic"])
-        article_topic = validate_topic_slug(data["article_topic"])
-        selected_text = sanitize_text(data["selected_text"])
-        reference_topic = sanitize_text(data["reference_topic"])
+        article_topic = validate_topic_slug(data["article_topic"].strip())
+        reference_topic = validate_topic_slug(data["reference_topic"].strip())
+        selected_text = data["selected_text"]
+        if not isinstance(selected_text, str):
+            raise BadRequest("selected_text must be a string.")
+        selected_text = selected_text.strip()
+        if any(ch in selected_text for ch in "\r\n[]"):
+            return jsonify({"error": "selected_text contains unsupported characters."}), 400
+        if not selected_text.strip() or not reference_topic.strip():
+            return jsonify({"error": "selected_text and reference_topic must be non-empty."}), 400
         topic_key = article_topic.lower()
         topic_data = get_topic_data(topic_key)
         if not topic_data:
             return jsonify({"error": "Topic not found."}), 404
         markdown_content = topic_data.get("markdown", "")
+        if selected_text not in markdown_content:
+            return jsonify({"error": "selected_text not found in article content."}), 400
         topic_suggestions = topic_data.get("topic_suggestions", [])
         # Add the new reference topic to topic_suggestions if not present
         if reference_topic not in topic_suggestions:
@@ -490,7 +536,9 @@ def add_reference():
         def replace_first(text, sub, repl):
             pattern = re.escape(sub)
             return re.sub(pattern, repl, text, count=1)
-        link_md = f"[{selected_text}](/" + reference_topic.replace(" ", "%20") + ")"
+        from urllib.parse import quote
+        encoded_reference_topic = quote(reference_topic, safe="")
+        link_md = f"[{selected_text}](/" + encoded_reference_topic + ")"
         new_markdown = replace_first(markdown_content, selected_text, link_md)
         # Save the updated markdown and topic suggestions
         from content.markdown_processor import linkify_topics, convert_markdown, remove_duplicate_header
@@ -511,11 +559,12 @@ def add_reference():
 def admin_review_queue():
     """
     Admin endpoint to view pending submissions in the review queue.
-    This endpoint is for future implementation of human approval workflow.
-    
-    TODO: Add authentication/authorization before deploying to production.
+    This endpoint requires admin token authentication.
     """
     try:
+        if not _is_authorized_admin_request():
+            return jsonify({"error": "Unauthorized"}), 401
+
         review_queue = get_review_queue()
         
         # Get pending submissions
@@ -545,9 +594,12 @@ def admin_review_action():
         "reason": "optional rejection reason"
     }
     
-    TODO: Add authentication/authorization before deploying to production.
+    This endpoint requires admin token authentication.
     """
     try:
+        if not _is_authorized_admin_request():
+            return jsonify({"error": "Unauthorized"}), 401
+
         data = request.get_json()
         validate_json_payload(data, ["submission_id", "action"])
         
@@ -607,4 +659,5 @@ if __name__ == "__main__":
         print("✅ OpenAI API mode activated")
     
     print("🚀 Starting Flask application...")
-    app.run(debug=True, use_reloader=False)
+    debug_mode = os.environ.get("FLASK_DEBUG", "").strip().lower() in DEBUG_TRUE_VALUES
+    app.run(debug=debug_mode, use_reloader=False)

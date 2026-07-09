@@ -426,7 +426,13 @@ curl -X POST http://localhost:5000/admin/review_action \
 ```
 
 ### Security Note
-⚠️ **TODO**: Add authentication/authorization to admin endpoints before production deployment.
+✅ Admin endpoints require an API token.
+
+Set the `ADMIN_API_TOKEN` environment variable and include the token on requests using either:
+- `X-Admin-Token: <token>`
+- `Authorization: Bearer <token>`
+
+If `ADMIN_API_TOKEN` is not configured, all admin endpoint access is denied by default.
 
 ---
 
@@ -505,7 +511,7 @@ Use this checklist to verify security implementation:
 - [x] JSON payload validation
 - [x] Input length restrictions
 - [x] Clear input framing for LLM
-- [ ] Admin authentication (TODO)
+- [x] Admin authentication via `ADMIN_API_TOKEN`
 - [ ] CAPTCHA implementation (optional enhancement)
 - [ ] Secondary LLM validation (optional enhancement)
 
