@@ -1,5 +1,7 @@
 # encycloped.ai (AI Moderated Encyclopedia)
 
+> Recruiter-oriented project summary: [RECRUITER_BRIEF.md](RECRUITER_BRIEF.md)
+
 **encycloped.ai** is an experimental, community-driven project that combines the power of ChatGPT 4.1 (or any other LLM with an API) with the collaborative spirit of Wikipedia. This platform dynamically generates encyclopedia-style articles with citations using the ChatGPT 4.1 (or any other LLM with an API) API, while allowing users to report inaccuracies and contribute missing information. AI moderation helps ensure that the content remains accurate and reliable, even as the community drives its evolution.
 
 ## Why Not Wikipedia?
